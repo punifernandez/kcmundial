@@ -10,11 +10,12 @@ namespace KCMundial.Services
 {
     public class StorageService
     {
-        // Rutas fijas y determinísticas: C:\KCMundial\Photos\
-        private static readonly string ROOT_DIR = @"C:\KCMundial";
+        // Path base fijo y determinístico
+        public const string BasePath = @"C:\KCMundial";
         
-        private static readonly string STRIPS_DIR = Path.Combine(ROOT_DIR, "Photos", "Strips");
-        private static readonly string SHOTS_DIR = Path.Combine(ROOT_DIR, "Photos", "Shots");
+        private static readonly string STRIPS_DIR = Path.Combine(BasePath, "Photos", "Strips");
+        private static readonly string SHOTS_DIR = Path.Combine(BasePath, "Photos", "Shots");
+        private static readonly string LOGS_DIR = Path.Combine(BasePath, "Logs");
 
         /// <summary>
         /// Inicializa las carpetas necesarias. Debe llamarse al inicio de la aplicación.
@@ -25,7 +26,8 @@ namespace KCMundial.Services
             {
                 Directory.CreateDirectory(STRIPS_DIR);
                 Directory.CreateDirectory(SHOTS_DIR);
-                CrashLogger.Log($"CAP_SAVE_ROOT: {ROOT_DIR}");
+                Directory.CreateDirectory(LOGS_DIR);
+                CrashLogger.Log($"CAP_SAVE_ROOT: {BasePath}");
             }
             catch (Exception ex)
             {
@@ -62,7 +64,7 @@ namespace KCMundial.Services
                 Directory.CreateDirectory(SHOTS_DIR);
                 
                 // Retornar una carpeta temporal para procesamiento (solo para archivos intermedios)
-                var tempPath = Path.Combine(ROOT_DIR, "Photos", "temp", DateTime.Now.ToString("Session_HH-mm-ss"));
+                var tempPath = Path.Combine(BasePath, "Photos", "temp", DateTime.Now.ToString("Session_HH-mm-ss"));
                 Directory.CreateDirectory(tempPath);
                 return tempPath;
             });
@@ -86,6 +88,7 @@ namespace KCMundial.Services
                     if (File.Exists(sourceStripPath))
                     {
                         File.Copy(sourceStripPath, stripDestPath, overwrite: true);
+                        CrashLogger.Log($"STRIP saved: {stripDestPath}");
                         CrashLogger.Log($"CAP_SAVE_STRIP: Guardado exitoso - {new FileInfo(stripDestPath).Length} bytes");
                     }
                     else
@@ -136,6 +139,7 @@ namespace KCMundial.Services
                             
                             File.Copy(photoPaths[i], shotDestPath, overwrite: true);
                             savedPaths.Add(shotDestPath);
+                            CrashLogger.Log($"RAW saved: {shotDestPath}");
                             CrashLogger.Log($"CAP_SAVE_RAW: {shotDestPath} ({new FileInfo(shotDestPath).Length} bytes)");
                             
                             // Pequeño delay para evitar timestamps idénticos
@@ -182,6 +186,7 @@ namespace KCMundial.Services
                         data.SaveTo(stream);
                     }
                     
+                    CrashLogger.Log($"RAW saved: {fullPath}");
                     CrashLogger.Log($"CAP_SAVE_RAW: Guardado exitoso - {new FileInfo(fullPath).Length} bytes");
                     return fullPath;
                 }

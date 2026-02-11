@@ -5,7 +5,7 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
-    <AssemblyName>KCMundial_PROOF</AssemblyName>
+    <AssemblyName>KCMundial</AssemblyName>
     <RootNamespace>KCMundial</RootNamespace>
     <TargetPlatformVersion>10.0.19041.0</TargetPlatformVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

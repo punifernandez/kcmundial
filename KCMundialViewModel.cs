@@ -1489,12 +1489,17 @@ namespace KCMundial
             CrashLogger.Log($"CAP_FINAL_BEGIN - ThreadId: {threadId}, MemBefore: {memBefore / 1024 / 1024}MB, WorkingSetBefore: {workingSetBefore / 1024 / 1024}MB");
             
             // PAUSAR PREVIEW ANTES DE CUALQUIER OPERACIÓN (estructura try/finally garantiza resume)
+            bool previewWasRunning = false;
             if (_cameraService != null)
             {
                 try
                 {
-                    await _cameraService.PausePreviewAsync();
-                    await System.Threading.Tasks.Task.Delay(500, linkedCt); // Pequeño delay para estabilizar
+                    previewWasRunning = !_cameraService.IsPreviewPaused;
+                    if (previewWasRunning)
+                    {
+                        await _cameraService.PausePreviewAsync();
+                        await System.Threading.Tasks.Task.Delay(500, linkedCt); // Pequeño delay para estabilizar
+                    }
                 }
                 catch (Exception exPause)
                 {
@@ -1983,7 +1988,7 @@ namespace KCMundial
                 }
                 
                 // SIEMPRE REANUDAR PREVIEW, incluso si hay excepción o cancelación
-                if (_cameraService != null)
+                if (_cameraService != null && previewWasRunning)
                 {
                     try
                     {
@@ -2863,53 +2868,31 @@ namespace KCMundial
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // 4. Extraer cabeza y cuello
-                CrashLogger.Log("CAP4_COLLAGE: EXTRACT_HEAD_BEGIN");
-                var headAndNeckBitmap = ExtractHeadAndNeckFromOriginal(originalBitmap, processedMask);
-                if (headAndNeckBitmap == null || headAndNeckBitmap.IsNull)
+                // 4. Extraer busto estilo Panini (nuevo método)
+                CrashLogger.Log("CAP4_COLLAGE: EXTRACT_PANINI_BUST_BEGIN");
+                var paniniBustBitmap = ExtractPaniniBust(originalBitmap, processedMask);
+                if (paniniBustBitmap == null || paniniBustBitmap.IsNull)
                 {
                     alphaMask.Dispose();
                     processedMask.Dispose();
                     originalBitmap.Dispose();
-                    CrashLogger.Log("CAP4_COLLAGE: EXTRACT_HEAD_FAILED");
-                    throw new Exception("No se pudo extraer cabeza y cuello del frame original");
+                    CrashLogger.Log("CAP4_COLLAGE: EXTRACT_PANINI_BUST_FAILED");
+                    throw new Exception("No se pudo extraer busto Panini del frame original");
                 }
-                CrashLogger.Log($"CAP4_COLLAGE: EXTRACT_HEAD_OK size={headAndNeckBitmap.Width}x{headAndNeckBitmap.Height}");
+                CrashLogger.Log($"CAP4_COLLAGE: EXTRACT_PANINI_BUST_OK size={paniniBustBitmap.Width}x{paniniBustBitmap.Height}");
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // 5. Guardar cabeza y cuello extraída
-                CrashLogger.Log("CAP4_COLLAGE: SAVE_HEAD_BEGIN");
-                var headAndNeckPath = Path.Combine(sessionPath, "photo_head_and_neck.png");
-                using (var image = SkiaSharp.SKImage.FromBitmap(headAndNeckBitmap))
-                {
-                    using (var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
-                    {
-                        using (var stream = File.Create(headAndNeckPath))
-                        {
-                            data.SaveTo(stream);
-                        }
-                    }
-                }
-                CrashLogger.Log($"CAP4_COLLAGE: SAVE_HEAD_OK path={headAndNeckPath}");
-
+                // 5. Crear collage directamente con busto Panini (sin guardar intermedio)
+                cancellationToken.ThrowIfCancellationRequested();
+                CrashLogger.Log("CAP4_COLLAGE: CREATE_STICKER_BEGIN");
+                string stripPath = await _collageService.CreateStickerPaniniAsync(paniniBustBitmap, sessionPath, backgroundPath);
+                
                 // Limpiar
                 alphaMask.Dispose();
                 processedMask.Dispose();
                 originalBitmap.Dispose();
-                headAndNeckBitmap.Dispose();
-                
-                if (string.IsNullOrEmpty(headAndNeckPath) || !File.Exists(headAndNeckPath))
-                {
-                    CrashLogger.Log("CAP4_COLLAGE: SAVE_HEAD_VERIFY_FAILED");
-                    throw new Exception("No se pudo recortar la cabeza y cuello de la foto");
-                }
-                
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // 6. Crear collage
-                CrashLogger.Log("CAP4_COLLAGE: CREATE_STICKER_BEGIN");
-                string stripPath = await _collageService.CreateStickerAsync(headAndNeckPath, sessionPath, backgroundPath);
+                paniniBustBitmap.Dispose();
                 CrashLogger.Log($"CAP4_COLLAGE: CREATE_STICKER_OK path={stripPath}");
                 
                 if (string.IsNullOrEmpty(stripPath) || !System.IO.File.Exists(stripPath))
@@ -3133,6 +3116,134 @@ namespace KCMundial
             {
                 // La cámara ya está activa - NO hacer nada
                 // Solo asegurar que siga enviando frames
+            }
+        }
+
+        /// <summary>
+        /// Extrae busto estilo Panini desde alphaMask de persona (nuevo método para evitar "cara gigante")
+        /// </summary>
+        private SkiaSharp.SKBitmap? ExtractPaniniBust(SkiaSharp.SKBitmap originalBitmap, SkiaSharp.SKBitmap alphaMask)
+        {
+            if (originalBitmap == null || originalBitmap.IsNull || alphaMask == null || alphaMask.IsNull)
+            {
+                CrashLogger.Log("ExtractPaniniBust: bitmap o máscara es null");
+                return null;
+            }
+
+            try
+            {
+                // 1) Asegurar que máscara tenga el mismo tamaño que original
+                SkiaSharp.SKBitmap? maskResized = null;
+                if (alphaMask.Width != originalBitmap.Width || alphaMask.Height != originalBitmap.Height)
+                {
+                    var maskInfo = new SkiaSharp.SKImageInfo(originalBitmap.Width, originalBitmap.Height, SkiaSharp.SKColorType.Alpha8, SkiaSharp.SKAlphaType.Opaque);
+                    maskResized = alphaMask.Resize(maskInfo, SkiaSharp.SKFilterQuality.Medium);
+                }
+                else
+                {
+                    maskResized = alphaMask.Copy();
+                }
+
+                // 2) Obtener bounding box de persona desde alphaMask
+                int minX = originalBitmap.Width, minY = originalBitmap.Height;
+                int maxX = 0, maxY = 0;
+                bool foundPerson = false;
+
+                unsafe
+                {
+                    var maskPtr = (byte*)maskResized.GetPixels();
+                    var maskStride = maskResized.RowBytes;
+
+                    for (int y = 0; y < maskResized.Height; y++)
+                    {
+                        for (int x = 0; x < maskResized.Width; x++)
+                        {
+                            byte alpha = maskPtr[y * maskStride + x];
+                            if (alpha > 128) // Umbral 50%
+                            {
+                                foundPerson = true;
+                                if (x < minX) minX = x;
+                                if (x > maxX) maxX = x;
+                                if (y < minY) minY = y;
+                                if (y > maxY) maxY = y;
+                            }
+                        }
+                    }
+                }
+
+                if (!foundPerson)
+                {
+                    CrashLogger.Log("ExtractPaniniBust: No se encontró persona en la máscara");
+                    if (maskResized != alphaMask)
+                        maskResized?.Dispose();
+                    return null;
+                }
+
+                // 3) Definir bust rect
+                int personH = maxY - minY + 1;
+                int personW = maxX - minX + 1;
+                
+                int top = minY + (int)(0.02 * personH);
+                int bottom = minY + (int)(0.72 * personH); // busto (pecho medio)
+                int left = minX - (int)(0.08 * personW);
+                int right = maxX + (int)(0.08 * personW);
+                
+                // Clamp a límites
+                if (top < 0) top = 0;
+                if (left < 0) left = 0;
+                if (bottom > originalBitmap.Height) bottom = originalBitmap.Height;
+                if (right > originalBitmap.Width) right = originalBitmap.Width;
+                
+                int bustWidth = right - left;
+                int bustHeight = bottom - top;
+                
+                CrashLogger.Log($"ExtractPaniniBust: Bounding box persona {personW}x{personH}, Bust rect {bustWidth}x{bustHeight} desde ({left}, {top})");
+
+                // 4) Recortar original BGRA con ese rect y recortar alpha equivalente
+                var bustBitmap = new SkiaSharp.SKBitmap(bustWidth, bustHeight, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
+                
+                unsafe
+                {
+                    var sourcePtr = (uint*)originalBitmap.GetPixels();
+                    var maskPtr = (byte*)maskResized.GetPixels();
+                    var destPtr = (uint*)bustBitmap.GetPixels();
+                    var sourceStride = originalBitmap.RowBytes / 4;
+                    var maskStride = maskResized.RowBytes;
+                    var destStride = bustBitmap.RowBytes / 4;
+
+                    for (int y = 0; y < bustHeight; y++)
+                    {
+                        for (int x = 0; x < bustWidth; x++)
+                        {
+                            int sourceX = left + x;
+                            int sourceY = top + y;
+                            
+                            if (sourceX < originalBitmap.Width && sourceY < originalBitmap.Height)
+                            {
+                                uint sourcePixel = sourcePtr[sourceY * sourceStride + sourceX];
+                                byte maskAlpha = maskPtr[sourceY * maskStride + sourceX];
+                                
+                                // Aplicar máscara al alpha
+                                byte sourceA = (byte)((sourcePixel >> 24) & 0xFF);
+                                byte finalAlpha = (byte)((sourceA * maskAlpha) / 255);
+                                
+                                uint finalPixel = (sourcePixel & 0x00FFFFFF) | ((uint)finalAlpha << 24);
+                                destPtr[y * destStride + x] = finalPixel;
+                            }
+                        }
+                    }
+                }
+
+                if (maskResized != alphaMask)
+                    maskResized?.Dispose();
+
+                CrashLogger.Log($"ExtractPaniniBust: Busto extraído {bustWidth}x{bustHeight}");
+                return bustBitmap;
+            }
+            catch (Exception ex)
+            {
+                CrashLogger.Log($"ExtractPaniniBust: Error - {ex.Message}", ex);
+                return null;
             }
         }
 

@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using SkiaSharp;
+using KCMundial;
 
 namespace KCMundial.Services
 {
@@ -762,29 +763,42 @@ namespace KCMundial.Services
                     var canvas = surface.Canvas;
                     canvas.Clear(SKColors.White);
 
-                    // Buscar el background de figurita
+                    // Background path fijo: arg (4).png
                     string? actualBackgroundPath = backgroundPath;
                     if (string.IsNullOrEmpty(actualBackgroundPath))
                     {
-                        // Buscar en múltiples ubicaciones
-                        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                        var possiblePaths = new[]
+                        // Path fijo: C:\KCMundial\Assets\frames\arg (4).png
+                        var fixedPath = Path.Combine(StorageService.BasePath, "Assets", "frames", "arg (4).png");
+                        
+                        if (File.Exists(fixedPath))
                         {
-                            Path.Combine(desktop, "KCMundial", "Assets", "background.png"),
-                            Path.Combine(desktop, "KCMundial", "Assets", "figurita.png"),
-                            Path.Combine(desktop, "KCMundial", "Assets", "sticker.png"),
-                            Path.Combine(AppContext.BaseDirectory, "Assets", "background.png"),
-                            Path.Combine(AppContext.BaseDirectory, "Assets", "figurita.png"),
-                            Path.Combine(AppContext.BaseDirectory, "Assets", "sticker.png")
-                        };
-
-                        foreach (var path in possiblePaths)
+                            actualBackgroundPath = fixedPath;
+                            System.Diagnostics.Debug.WriteLine($"✓ Background encontrado (path fijo): {fixedPath}");
+                        }
+                        else
                         {
-                            if (File.Exists(path))
+                            // Fallback: buscar en otras ubicaciones
+                            var possiblePaths = new[]
                             {
-                                actualBackgroundPath = path;
-                                System.Diagnostics.Debug.WriteLine($"✓ Background encontrado: {path}");
-                                break;
+                                Path.Combine(StorageService.BasePath, "Assets", "frames", "arg.png"),
+                                Path.Combine(AppContext.BaseDirectory, "Assets", "frames", "arg (4).png"),
+                                Path.Combine(AppContext.BaseDirectory, "Assets", "frames", "arg.png")
+                            };
+
+                            foreach (var path in possiblePaths)
+                            {
+                                if (File.Exists(path))
+                                {
+                                    actualBackgroundPath = path;
+                                    System.Diagnostics.Debug.WriteLine($"✓ Background encontrado (fallback): {path}");
+                                    break;
+                                }
+                            }
+                            
+                            if (string.IsNullOrEmpty(actualBackgroundPath))
+                            {
+                                CrashLogger.Log($"CAP_SAVE_FAIL: Background no encontrado - {fixedPath}");
+                                System.Diagnostics.Debug.WriteLine($"⚠ No se encontró background, usando fondo blanco");
                             }
                         }
                     }
@@ -822,100 +836,125 @@ namespace KCMundial.Services
                         System.Diagnostics.Debug.WriteLine("⚠ No se encontró background, usando fondo blanco");
                     }
 
-                    // Dibujar la foto sobre el background
-                    // La foto ocupará la mayor parte del espacio disponible
-                    // Dejaremos márgenes pequeños para que el background sea visible
-                    const int PHOTO_MARGIN = 20; // Márgenes de 20px en todos los lados
-                    const int PHOTO_WIDTH = STICKER_WIDTH - (PHOTO_MARGIN * 2);  // 491 px
-                    const int PHOTO_HEIGHT = STICKER_HEIGHT - (PHOTO_MARGIN * 2); // 669 px
-                    const int PHOTO_X = PHOTO_MARGIN;
-                    const int PHOTO_Y = PHOTO_MARGIN;
-
+                    // DIBUJAR CABEZA Y CUELLO SOBRE BACKGROUND CON TRANSICIÓN SUAVE EN EL CUELLO
                     if (File.Exists(photoPath))
                     {
+                        System.Diagnostics.Debug.WriteLine($"Cargando cabeza y cuello para sticker: {photoPath}");
+                        
                         using (var stream = File.OpenRead(photoPath))
                         {
                             using (var bitmap = SKBitmap.Decode(stream))
                             {
-                                if (bitmap != null && !bitmap.IsNull)
+                                if (bitmap == null || bitmap.IsNull)
                                 {
-                                    // Verificar si la imagen tiene canal alpha (transparencia)
-                                    bool hasAlpha = bitmap.AlphaType != SKAlphaType.Opaque;
+                                    throw new Exception("No se pudo cargar la imagen");
+                                }
+                                
+                                System.Diagnostics.Debug.WriteLine($"✓ Cabeza y cuello cargados: {bitmap.Width}x{bitmap.Height}");
                                     
-                                    // Crop-to-fill para ajustar la foto al espacio disponible
-                                    var targetAspectRatio = (float)PHOTO_WIDTH / PHOTO_HEIGHT;
-                                    var originalAspectRatio = (float)bitmap.Width / bitmap.Height;
-
-                                    float sourceX = 0, sourceY = 0, sourceWidth = bitmap.Width, sourceHeight = bitmap.Height;
-
-                                    if (originalAspectRatio > targetAspectRatio)
-                                    {
-                                        // Foto original es más ancha - recortar los lados
-                                        sourceHeight = bitmap.Height;
-                                        sourceWidth = bitmap.Height * targetAspectRatio;
-                                        sourceX = (bitmap.Width - sourceWidth) / 2;
-                                    }
-                                    else
-                                    {
-                                        // Foto original es más alta - recortar arriba/abajo
-                                        sourceWidth = bitmap.Width;
-                                        sourceHeight = bitmap.Width / targetAspectRatio;
-                                        sourceY = (bitmap.Height - sourceHeight) / 2;
-                                    }
-
-                                    var croppedBitmap = new SKBitmap((int)sourceWidth, (int)sourceHeight);
-                                    if (bitmap.ExtractSubset(croppedBitmap, new SKRectI((int)sourceX, (int)sourceY, (int)(sourceX + sourceWidth), (int)(sourceY + sourceHeight))))
-                                    {
-                                        // Asegurar que el bitmap escalado mantenga el formato RGBA si tiene transparencia
-                                        var scaledInfo = new SKImageInfo(PHOTO_WIDTH, PHOTO_HEIGHT, 
-                                            hasAlpha ? SKColorType.Rgba8888 : SKColorType.Rgb888x, 
-                                            hasAlpha ? SKAlphaType.Premul : SKAlphaType.Opaque);
-                                        
-                                        var scaledBitmap = croppedBitmap.Resize(scaledInfo, SKFilterQuality.High);
+                                // TAMAÑO MÁXIMO ABSOLUTO para la cabeza y cuello (NUNCA exceder estos valores)
+                                const int HEAD_MAX_HEIGHT = 200; // Altura máxima absoluta - NUNCA más grande
+                                const int HEAD_MAX_WIDTH = 160;  // Ancho máximo absoluto - NUNCA más grande
+                                const int HEAD_TOP_MARGIN = 80;  // Margen superior desde el top del sticker
+                                
+                                // Calcular escala SOLO para REDUCIR si es necesario (NUNCA agrandar)
+                                float scaleX = (float)HEAD_MAX_WIDTH / bitmap.Width;
+                                float scaleY = (float)HEAD_MAX_HEIGHT / bitmap.Height;
+                                
+                                // Usar el MENOR scale para que quepa completo sin exceder límites
+                                // PERO si ambos son > 1.0, significa que el recorte es más pequeño que el máximo
+                                // En ese caso, mantener tamaño original (scale = 1.0)
+                                float scale = Math.Min(scaleX, scaleY);
+                                
+                                // NUNCA agrandar: si scale > 1.0, mantener tamaño original
+                                if (scale > 1.0f)
+                                {
+                                    scale = 1.0f;
+                                }
+                                
+                                // Calcular dimensiones finales
+                                int scaledWidth = (int)(bitmap.Width * scale);
+                                int scaledHeight = (int)(bitmap.Height * scale);
+                                
+                                // FORZAR que NUNCA exceda los límites máximos (por si acaso)
+                                if (scaledWidth > HEAD_MAX_WIDTH)
+                                {
+                                    scaledWidth = HEAD_MAX_WIDTH;
+                                }
+                                if (scaledHeight > HEAD_MAX_HEIGHT)
+                                {
+                                    scaledHeight = HEAD_MAX_HEIGHT;
+                                }
+                                
+                                // Centrar horizontalmente, posicionar en la parte superior
+                                int photoX = (STICKER_WIDTH - scaledWidth) / 2;
+                                int photoY = HEAD_TOP_MARGIN;
+                                
+                                System.Diagnostics.Debug.WriteLine($"Escalando cabeza y cuello: {bitmap.Width}x{bitmap.Height} -> {scaledWidth}x{scaledHeight} (scale: {scale})");
+                                System.Diagnostics.Debug.WriteLine($"Posición en sticker: ({photoX}, {photoY})");
+                                
+                                // Escalar la foto
+                                var scaledInfo = new SKImageInfo(scaledWidth, scaledHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
+                                var scaledBitmap = bitmap.Resize(scaledInfo, SKFilterQuality.High);
+                                
                                         if (scaledBitmap != null && !scaledBitmap.IsNull)
                                         {
-                                            var photoRect = new SKRect(PHOTO_X, PHOTO_Y, PHOTO_X + PHOTO_WIDTH, PHOTO_Y + PHOTO_HEIGHT);
+                                    // Crear bitmap con fade suave en la parte inferior (cuello)
+                                    using (var maskedBitmap = new SKBitmap(scaledWidth, scaledHeight, SKColorType.Rgba8888, SKAlphaType.Premul))
+                                    {
+                                        // Copiar el bitmap escalado
+                                        unsafe
+                                        {
+                                            var sourcePtr = (uint*)scaledBitmap.GetPixels();
+                                            var destPtr = (uint*)maskedBitmap.GetPixels();
+                                            var sourceStride = scaledBitmap.RowBytes / 4;
+                                            var destStride = maskedBitmap.RowBytes / 4;
                                             
-                                            // Usar paint con modo de composición adecuado para respetar transparencia
-                                            using (var paint = new SKPaint())
+                                            int fadeStart = (int)(scaledHeight * 0.65); // Comenzar fade a partir del 65% de la altura (zona del cuello)
+                                            int fadeEnd = scaledHeight; // Fade completo al final
+                                            int fadeRange = fadeEnd - fadeStart;
+                                            
+                                            for (int y = 0; y < scaledHeight; y++)
                                             {
-                                                paint.IsAntialias = true;
-                                                paint.FilterQuality = SKFilterQuality.High;
-                                                // Si tiene transparencia, usar modo SrcOver para composición correcta
-                                                if (hasAlpha)
+                                                float alphaMultiplier = 1.0f; // Totalmente opaco por defecto
+                                                
+                                                if (y >= fadeStart && fadeRange > 0)
                                                 {
-                                                    paint.BlendMode = SKBlendMode.SrcOver;
+                                                    // Aplicar fade suave en la parte inferior (cuello)
+                                                    float fadeProgress = (float)(y - fadeStart) / fadeRange;
+                                                    // Usar curva suave (ease-out) para transición más natural
+                                                    fadeProgress = 1.0f - (float)Math.Pow(1.0f - fadeProgress, 2.5);
+                                                    alphaMultiplier = 1.0f - fadeProgress;
                                                 }
-                                                canvas.DrawBitmap(scaledBitmap, photoRect, paint);
+                                                
+                                                for (int x = 0; x < scaledWidth; x++)
+                                                {
+                                                    uint pixel = sourcePtr[y * sourceStride + x];
+                                                    
+                                                    // Extraer componentes RGBA
+                                                    byte r = (byte)(pixel & 0xFF);
+                                                    byte g = (byte)((pixel >> 8) & 0xFF);
+                                                    byte b = (byte)((pixel >> 16) & 0xFF);
+                                                    byte a = (byte)((pixel >> 24) & 0xFF);
+                                                    
+                                                    // Aplicar fade multiplicando el alpha
+                                                    a = (byte)(a * alphaMultiplier);
+                                                    
+                                                    // Reconstruir pixel con nuevo alpha
+                                                    destPtr[y * destStride + x] = (uint)((a << 24) | (b << 16) | (g << 8) | r);
+                                                }
                                             }
-                                            
-                                            scaledBitmap.Dispose();
-                                            System.Diagnostics.Debug.WriteLine($"✓ Foto dibujada: {PHOTO_WIDTH}x{PHOTO_HEIGHT} en ({PHOTO_X}, {PHOTO_Y}), Alpha: {hasAlpha}");
                                         }
-                                        croppedBitmap.Dispose();
-                                    }
-                                    else
-                                    {
-                                        croppedBitmap.Dispose();
-                                        // Fallback: escalar normal si el crop falla
-                                        var scaledInfo = new SKImageInfo(PHOTO_WIDTH, PHOTO_HEIGHT, 
-                                            hasAlpha ? SKColorType.Rgba8888 : SKColorType.Rgb888x, 
-                                            hasAlpha ? SKAlphaType.Premul : SKAlphaType.Opaque);
                                         
-                                        var scaledBitmap = bitmap.Resize(scaledInfo, SKFilterQuality.High);
-                                        if (scaledBitmap != null && !scaledBitmap.IsNull)
-                                        {
-                                            var photoRect = new SKRect(PHOTO_X, PHOTO_Y, PHOTO_X + PHOTO_WIDTH, PHOTO_Y + PHOTO_HEIGHT);
+                                        var photoRect = new SKRect(photoX, photoY, photoX + scaledWidth, photoY + scaledHeight);
                                             
                                             using (var paint = new SKPaint())
                                             {
                                                 paint.IsAntialias = true;
-                                                paint.FilterQuality = SKFilterQuality.High;
-                                                if (hasAlpha)
-                                                {
-                                                    paint.BlendMode = SKBlendMode.SrcOver;
-                                                }
-                                                canvas.DrawBitmap(scaledBitmap, photoRect, paint);
+                                            paint.BlendMode = SKBlendMode.SrcOver; // Para respetar transparencia
+                                            canvas.DrawBitmap(maskedBitmap, photoRect, paint);
+                                            System.Diagnostics.Debug.WriteLine($"✓ Cabeza y cuello dibujados con transición suave: {scaledWidth}x{scaledHeight} en ({photoX}, {photoY})");
+                                        }
                                             }
                                             
                                             scaledBitmap.Dispose();
@@ -923,7 +962,9 @@ namespace KCMundial.Services
                                     }
                                 }
                             }
-                        }
+                    else
+                    {
+                        throw new FileNotFoundException($"El archivo de foto no existe: {photoPath}");
                     }
 
                     // Guardar imagen
@@ -995,6 +1036,200 @@ namespace KCMundial.Services
 
                     var fileInfo = new FileInfo(outputPath);
                     System.Diagnostics.Debug.WriteLine($"✓✓✓ FIGURITA CREADA EXITOSAMENTE: {outputPath} ({fileInfo.Length} bytes)");
+                    return outputPath;
+                }
+                finally
+                {
+                    backgroundBitmap?.Dispose();
+                    surface?.Dispose();
+                }
+            });
+        }
+
+        /// <summary>
+        /// Crea un sticker Panini estilo 1:1 (busto) desde SKBitmap directamente
+        /// </summary>
+        public async Task<string> CreateStickerPaniniAsync(SkiaSharp.SKBitmap bustBitmap, string outputFolder, string? backgroundPath = null)
+        {
+            return await Task.Run(() =>
+            {
+                if (bustBitmap == null || bustBitmap.IsNull)
+                {
+                    throw new ArgumentException("Bust bitmap es null");
+                }
+
+                var outputPath = Path.Combine(outputFolder, "sticker.jpg");
+                Directory.CreateDirectory(outputFolder);
+
+                // Dimensiones: 4.5 cm x 6 cm a 300 DPI
+                const int STICKER_WIDTH = 531;   // 4.5 cm
+                const int STICKER_HEIGHT = 709;  // 6 cm
+                const int DPI = 300;
+
+                SKSurface? surface = null;
+                SKBitmap? backgroundBitmap = null;
+
+                try
+                {
+                    var imageInfo = new SKImageInfo(STICKER_WIDTH, STICKER_HEIGHT, SKColorType.Rgba8888, SKAlphaType.Opaque);
+                    surface = SKSurface.Create(imageInfo);
+                    if (surface == null)
+                    {
+                        throw new Exception("No se pudo crear la superficie para la figurita");
+                    }
+
+                    var canvas = surface.Canvas;
+                    canvas.Clear(SKColors.White);
+
+                    // Background path fijo: arg (4).png
+                    string? actualBackgroundPath = backgroundPath;
+                    if (string.IsNullOrEmpty(actualBackgroundPath))
+                    {
+                        var fixedPath = Path.Combine(StorageService.BasePath, "Assets", "frames", "arg (4).png");
+                        if (File.Exists(fixedPath))
+                        {
+                            actualBackgroundPath = fixedPath;
+                        }
+                        else
+                        {
+                            var fallbackPath = Path.Combine(StorageService.BasePath, "Assets", "frames", "arg.png");
+                            if (File.Exists(fallbackPath))
+                            {
+                                actualBackgroundPath = fallbackPath;
+                            }
+                        }
+                    }
+
+                    // Cargar y dibujar el background
+                    if (!string.IsNullOrEmpty(actualBackgroundPath) && File.Exists(actualBackgroundPath))
+                    {
+                        try
+                        {
+                            using (var stream = File.OpenRead(actualBackgroundPath))
+                            {
+                                backgroundBitmap = SKBitmap.Decode(stream);
+                            }
+
+                            if (backgroundBitmap != null && !backgroundBitmap.IsNull)
+                            {
+                                var scaledBackground = backgroundBitmap.Resize(new SKImageInfo(STICKER_WIDTH, STICKER_HEIGHT), SKFilterQuality.High);
+                                if (scaledBackground != null && !scaledBackground.IsNull)
+                                {
+                                    canvas.DrawBitmap(scaledBackground, new SKRect(0, 0, STICKER_WIDTH, STICKER_HEIGHT));
+                                    scaledBackground.Dispose();
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            CrashLogger.Log($"CAP_SAVE_FAIL: Error al cargar background - {ex.Message}", ex);
+                        }
+                    }
+
+                    // 5) Definir subjectBox fijo dentro del sticker 531x709
+                    float subjectX = 0.10f * STICKER_WIDTH;  // 53.1
+                    float subjectY = 0.12f * STICKER_HEIGHT; // 85.08
+                    float subjectW = 0.80f * STICKER_WIDTH;  // 424.8
+                    float subjectH = 0.70f * STICKER_HEIGHT; // 496.3
+
+                    // 6) Escalar bust recortado manteniendo aspect ratio
+                    float bustAspect = (float)bustBitmap.Width / bustBitmap.Height;
+                    float subjectAspect = subjectW / subjectH;
+                    
+                    float scale;
+                    if (bustAspect > subjectAspect)
+                    {
+                        // Bust es más ancho - limitar por ancho
+                        scale = subjectW / bustBitmap.Width;
+                    }
+                    else
+                    {
+                        // Bust es más alto - limitar por altura
+                        scale = subjectH / bustBitmap.Height;
+                    }
+                    
+                    int scaledWidth = (int)(bustBitmap.Width * scale);
+                    int scaledHeight = (int)(bustBitmap.Height * scale);
+                    
+                    // 7) Posicionar: x centrado dentro de subjectBox, y = subjectY (con aire arriba)
+                    float photoX = subjectX + (subjectW - scaledWidth) / 2.0f;
+                    float photoY = subjectY;
+
+                    // Escalar el bust
+                    var scaledInfo = new SKImageInfo(scaledWidth, scaledHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
+                    var scaledBust = bustBitmap.Resize(scaledInfo, SKFilterQuality.High);
+                    
+                    if (scaledBust != null && !scaledBust.IsNull)
+                    {
+                        var photoRect = new SKRect(photoX, photoY, photoX + scaledWidth, photoY + scaledHeight);
+                        using (var paint = new SKPaint())
+                        {
+                            paint.IsAntialias = true;
+                            paint.BlendMode = SKBlendMode.SrcOver;
+                            canvas.DrawBitmap(scaledBust, photoRect, paint);
+                        }
+                        scaledBust.Dispose();
+                    }
+
+                    // Guardar imagen
+                    canvas.Flush();
+                    SKImage? image = null;
+                    try
+                    {
+                        image = surface.Snapshot();
+                        if (image == null)
+                        {
+                            throw new Exception("No se pudo crear la imagen de la figurita");
+                        }
+
+                        SKData? data = image.Encode(SKEncodedImageFormat.Jpeg, 90);
+                        if (data == null)
+                        {
+                            throw new Exception("No se pudo codificar la imagen");
+                        }
+
+                        using (data)
+                        {
+                            byte[] bytes = data.ToArray();
+                            if (bytes == null || bytes.Length == 0)
+                            {
+                                throw new Exception("Los datos codificados están vacíos");
+                            }
+
+                            // Guardar con metadatos DPI correctos
+                            using (var ms = new MemoryStream(bytes))
+                            {
+                                using (var bitmap = new Bitmap(ms))
+                                {
+                                    bitmap.SetResolution(DPI, DPI);
+                                    var encoder = ImageCodecInfo.GetImageEncoders()
+                                        .FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
+                                    
+                                    if (encoder != null)
+                                    {
+                                        var encoderParams = new EncoderParameters(1);
+                                        encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 90L);
+                                        bitmap.Save(outputPath, encoder, encoderParams);
+                                        encoderParams.Dispose();
+                                    }
+                                    else
+                                    {
+                                        bitmap.Save(outputPath, ImageFormat.Jpeg);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        image?.Dispose();
+                    }
+
+                    if (!File.Exists(outputPath))
+                    {
+                        throw new Exception("El archivo de la figurita no se creó correctamente");
+                    }
+
                     return outputPath;
                 }
                 finally

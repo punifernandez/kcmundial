@@ -262,9 +262,17 @@ namespace KCMundial.Services
         /// </summary>
         public async Task PausePreviewAsync()
         {
-            CrashLogger.Log("CAPTURE: Preview paused");
-            await StopPreviewAsync();
-            // IsPreviewPaused se actualiza en StopPreviewAsync()
+            CrashLogger.Log("PREVIEW_PAUSE_BEGIN");
+            try
+            {
+                await StopPreviewAsync();
+                CrashLogger.Log("PREVIEW_PAUSE_OK");
+            }
+            catch (Exception ex)
+            {
+                CrashLogger.Log($"PREVIEW_PAUSE_FAILED - {ex.Message}", ex);
+                throw;
+            }
         }
         
         /// <summary>
@@ -272,21 +280,23 @@ namespace KCMundial.Services
         /// </summary>
         public async Task ResumePreviewAsync()
         {
+            CrashLogger.Log("PREVIEW_RESUME_BEGIN");
             try
             {
                 if (!_isInitialized || _activeMediaCapture == null)
                 {
-                    CrashLogger.Log("CAPTURE: Preview resume FAILED - Camera not initialized");
+                    CrashLogger.Log("PREVIEW_RESUME_FAILED - Camera not initialized");
                     return;
                 }
                 
                 // Re-suscribir el frame callback si se detuvo
                 await StartPreviewAsync();
-                CrashLogger.Log("CAPTURE: Preview resumed");
+                CrashLogger.Log("PREVIEW_RESUME_OK");
             }
             catch (Exception ex)
             {
-                CrashLogger.Log($"CAPTURE: Preview resume FAILED - {ex.Message}", ex);
+                CrashLogger.Log($"PREVIEW_RESUME_FAILED - {ex.Message}", ex);
+                // No lanzar excepción - el preview debe intentar reanudarse siempre
             }
         }
 
