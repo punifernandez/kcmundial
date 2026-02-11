@@ -113,6 +113,11 @@ namespace KCMundial
         private DateTime _lastPreviewLogTime = DateTime.Now;
         private readonly TimeSpan _previewLogInterval = TimeSpan.FromSeconds(2);
         
+        // Throttling: 10-15 FPS = 66-100ms entre frames
+        private readonly TimeSpan _previewThrottleInterval = TimeSpan.FromMilliseconds(80); // ~12.5 FPS (target: 10-15 FPS, 66-100ms)
+        private DateTime _lastPreviewUpdate = DateTime.MinValue;
+        private readonly object _previewThrottleLock = new object();
+        
         // Control de pipelines: Preview vs Final
         // PREVIEW SIEMPRE RAW: Prohibido procesamiento en preview
         private const bool _enablePreviewProcessing = false; // SIEMPRE false - preview 100% RAW sin procesamiento
@@ -1134,30 +1139,30 @@ namespace KCMundial
                 
                 try
                 {
-                    await Task.Delay(500, cancellationToken);
-                    CrashLogger.Log("CAPTURE: Preview paused, capturing...");
+                await Task.Delay(500, cancellationToken);
+                CrashLogger.Log("CAPTURE: Preview paused, capturing...");
 
-                    // Procesar según subfase
-                    string? photoPath = null;
-                    
-                    if (captureSubPhase == CaptureSubPhase.CAP0_RawStillOnly)
-                    {
-                        photoPath = await ProcessCaptureCAP0(cancellationToken);
-                    }
-                    else if (captureSubPhase == CaptureSubPhase.CAP1_SaveOnly)
-                    {
-                        photoPath = await ProcessCaptureCAP1(cancellationToken);
-                    }
-                    else if (captureSubPhase == CaptureSubPhase.CAP2_LoadSkia)
-                    {
-                        photoPath = await ProcessCaptureCAP2(cancellationToken);
-                    }
-                    else if (captureSubPhase == CaptureSubPhase.CAP3_ONNXOnly)
-                    {
-                        photoPath = await ProcessCaptureCAP3(cancellationToken);
-                    }
-                    else if (captureSubPhase == CaptureSubPhase.CAP4_FullPipeline)
-                    {
+                // Procesar según subfase
+                string? photoPath = null;
+                
+                if (captureSubPhase == CaptureSubPhase.CAP0_RawStillOnly)
+                {
+                    photoPath = await ProcessCaptureCAP0(cancellationToken);
+                }
+                else if (captureSubPhase == CaptureSubPhase.CAP1_SaveOnly)
+                {
+                    photoPath = await ProcessCaptureCAP1(cancellationToken);
+                }
+                else if (captureSubPhase == CaptureSubPhase.CAP2_LoadSkia)
+                {
+                    photoPath = await ProcessCaptureCAP2(cancellationToken);
+                }
+                else if (captureSubPhase == CaptureSubPhase.CAP3_ONNXOnly)
+                {
+                    photoPath = await ProcessCaptureCAP3(cancellationToken);
+                }
+                else if (captureSubPhase == CaptureSubPhase.CAP4_FullPipeline)
+                {
                         // USAR CaptureAndProcessFinalAsync() - función única de captura final
                         // Bloquea reentradas automáticamente
                         var (alphaPath, cutoutPath) = await CaptureAndProcessFinalAsync(cancellationToken);
@@ -1171,40 +1176,40 @@ namespace KCMundial
                         // Usar cutoutPath como photoPath para compatibilidad con código existente
                         photoPath = cutoutPath;
                         CrashLogger.Log($"CAP4: CAPTURE_AND_PROCESS_OK - Alpha: {alphaPath}, Cutout: {cutoutPath}");
-                    }
-                    
-                    // CAP0 no guarda archivo, solo valida captura
-                    if (captureSubPhase == CaptureSubPhase.CAP0_RawStillOnly)
-                    {
-                        CrashLogger.Log("CAPTURE_SEQUENCE: CAP0 completado - Solo validación de captura");
-                        PlaySound("shutter");
-                        ResetToIdle();
-                        return;
-                    }
-                    
-                    if (string.IsNullOrEmpty(photoPath))
-                    {
-                        CrashLogger.Log("CAPTURE_SEQUENCE: photoPath es null o vacío");
-                        throw new Exception("Error al capturar la foto");
-                    }
-
-                    // Reproducir sonido de obturador
+                }
+                
+                // CAP0 no guarda archivo, solo valida captura
+                if (captureSubPhase == CaptureSubPhase.CAP0_RawStillOnly)
+                {
+                    CrashLogger.Log("CAPTURE_SEQUENCE: CAP0 completado - Solo validación de captura");
                     PlaySound("shutter");
+                    ResetToIdle();
+                    return;
+                }
+                
+                if (string.IsNullOrEmpty(photoPath))
+                {
+                    CrashLogger.Log("CAPTURE_SEQUENCE: photoPath es null o vacío");
+                    throw new Exception("Error al capturar la foto");
+                }
 
-                    _capturedPhotos.Add(photoPath);
-                    CrashLogger.Log($"CAPTURE_SEQUENCE: Foto agregada a _capturedPhotos: {photoPath}");
+                // Reproducir sonido de obturador
+                PlaySound("shutter");
 
-                    // Solo procesar collage si es CAP4
-                    if (captureSubPhase < CaptureSubPhase.CAP4_FullPipeline)
-                    {
-                        CrashLogger.Log($"CAPTURE_SEQUENCE: SubPhase {captureSubPhase} - Saltando procesamiento de collage");
-                        ResetToIdle();
-                        return;
-                    }
+                _capturedPhotos.Add(photoPath);
+                CrashLogger.Log($"CAPTURE_SEQUENCE: Foto agregada a _capturedPhotos: {photoPath}");
 
-                    // Compose collage (solo CAP4)
-                    State = KCMundialState.Composing;
-                    await ProcessCollageCAP4(photoPath, cancellationToken);
+                // Solo procesar collage si es CAP4
+                if (captureSubPhase < CaptureSubPhase.CAP4_FullPipeline)
+                {
+                    CrashLogger.Log($"CAPTURE_SEQUENCE: SubPhase {captureSubPhase} - Saltando procesamiento de collage");
+                    ResetToIdle();
+                    return;
+                }
+
+                // Compose collage (solo CAP4)
+                State = KCMundialState.Composing;
+                await ProcessCollageCAP4(photoPath, cancellationToken);
                 }
                 finally
                 {
@@ -1262,23 +1267,8 @@ namespace KCMundial
             
             if (frameToProcess == null) return;
             
-            // Throttle: máximo 10 FPS (100ms por frame)
-            var now = DateTime.Now;
-            if (now - _lastFramePresented < _minFrameInterval)
-            {
-                _droppedFrames++;
-                return; // Descartar frame
-            }
-            
-            // Si ya hay un render en curso, descartar este frame (latest-frame-wins)
-            if (_isRendering)
-            {
-                _droppedFrames++;
-                return;
-            }
-            
             // PREVIEW RAW: Solo copiar frame a WriteableBitmap y actualizar UI
-            // Todo en background thread excepto la actualización de UI
+            // Throttling y descarte de frames duplicados se maneja en ProcessPreviewFrameRaw
             Task.Run(() =>
             {
                 try
@@ -1293,6 +1283,7 @@ namespace KCMundial
                     if (latest == null) return;
                     
                     // Procesar frame RAW (sin segmentación, sin alpha matte, sin postprocesado, sin Skia)
+                    // ProcessPreviewFrameRaw maneja throttling (10-15 FPS) y descarte de frames duplicados
                     ProcessPreviewFrameRaw(latest);
                 }
                 catch (Exception ex)
@@ -1315,6 +1306,29 @@ namespace KCMundial
             
             try
             {
+                // THROTTLING: Verificar si pasó el tiempo mínimo desde el último update (10-15 FPS)
+                lock (_previewThrottleLock)
+                {
+                    var now = DateTime.Now;
+                    var timeSinceLastUpdate = now - _lastPreviewUpdate;
+                    
+                    if (timeSinceLastUpdate < _previewThrottleInterval)
+                    {
+                        // Descartar frame - throttling activo
+                        _droppedFrames++;
+                        return;
+                    }
+                    
+                    // Si hay un frame siendo procesado, descartar este
+                    if (_isRendering)
+                    {
+                        _droppedFrames++;
+                        return;
+                    }
+                    
+                    _lastPreviewUpdate = now;
+                }
+                
                 // 1. Copiar frame (background thread) - MÍNIMO necesario
                 var swCopy = System.Diagnostics.Stopwatch.StartNew();
                 var width = frame.PixelWidth;
@@ -1337,22 +1351,23 @@ namespace KCMundial
                 // 3. Actualizar contador y logs cada 30 frames
                 _rawFrameCount++;
                 _rawFramesProcessed++;
-                var now = DateTime.Now;
-                var elapsed = (now - _rawFpsStartTime).TotalSeconds;
+                var nowLog = DateTime.Now;
+                var elapsed = (nowLog - _rawFpsStartTime).TotalSeconds;
                 
                 if (_rawFrameCount >= 30)
                 {
                     var fps = _rawFramesProcessed / elapsed;
-                    CrashLogger.Log($"PREVIEW_RAW_FRAME: FrameCount={_rawFrameCount}, FPS={fps:F1}, BackgroundThreadId={backgroundThreadId}, CopyTime={copyTime:F2}ms, ConvertTime={convertTime:F2}ms");
+                    var throttleMs = _previewThrottleInterval.TotalMilliseconds;
+                    CrashLogger.Log($"PREVIEW_RAW_FRAME: FrameCount={_rawFrameCount}, FPS={fps:F1}, Throttle={throttleMs}ms, BackgroundThreadId={backgroundThreadId}, CopyTime={copyTime:F2}ms, ConvertTime={convertTime:F2}ms, Dropped={_droppedFrames}");
                     _rawFrameCount = 0;
                     _rawFramesProcessed = 0;
-                    _rawFpsStartTime = now;
+                    _rawFpsStartTime = nowLog;
                 }
                 
-                // 4. Presentar en UI (UI thread) - Solo actualización de ImageSource
+                // 4. Presentar en UI (UI thread) - Solo actualización de ImageSource usando BeginInvoke (NO bloquea)
                 var swUI = System.Diagnostics.Stopwatch.StartNew();
                 _isRendering = true;
-                Application.Current.Dispatcher.InvokeAsync(() =>
+                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     var uiThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
                     try
@@ -1367,11 +1382,15 @@ namespace KCMundial
                         
                         _lastFramePresented = DateTime.Now;
                     }
+                    catch (Exception exUI)
+                    {
+                        CrashLogger.Log($"PREVIEW_UI_ERROR: {exUI.Message}", exUI);
+                    }
                     finally
                     {
                         _isRendering = false;
                     }
-                }, DispatcherPriority.Render);
+                }), DispatcherPriority.Render);
                 swUI.Stop();
                 var uiTime = swUI.Elapsed.TotalMilliseconds;
                 
@@ -1382,8 +1401,7 @@ namespace KCMundial
                 _framesProcessed++;
                 _rawFramesProcessed++;
                 
-                // Log cada 2 segundos
-                var nowLog = DateTime.Now;
+                // Log cada 2 segundos (usar nowLog ya definido arriba)
                 if (nowLog - _lastPreviewLogTime >= _previewLogInterval)
                 {
                     if (_copyFrameTimes.Count > 0)
@@ -1392,7 +1410,7 @@ namespace KCMundial
                         var avgConvert = _convertTimes.Average();
                         var avgUI = _uiPresentTimes.Average();
                         var avgTotal = avgCopy + avgConvert + avgUI;
-                        var fps = _framesProcessed / (now - _lastPreviewLogTime).TotalSeconds;
+                        var fps = _framesProcessed / (nowLog - _lastPreviewLogTime).TotalSeconds;
                         
                         CrashLogger.Log($"PREVIEW_STAGE_TIMINGS: Copy={avgCopy:F2}ms, Convert={avgConvert:F2}ms, UI={avgUI:F2}ms, Total={avgTotal:F2}ms");
                         CrashLogger.Log($"PREVIEW_FPS_REAL: {fps:F1} fps, Processed={_framesProcessed}, Dropped={_droppedFrames}");
@@ -1404,18 +1422,18 @@ namespace KCMundial
                         _uiPresentTimes.Clear();
                         _framesProcessed = 0;
                         _droppedFrames = 0;
-                        _lastPreviewLogTime = now;
+                        _lastPreviewLogTime = nowLog;
                     }
                 }
                 
                 // Log FPS RAW cada 2 segundos
-                var rawElapsed = (now - _rawFpsStartTime).TotalSeconds;
+                var rawElapsed = (nowLog - _rawFpsStartTime).TotalSeconds;
                 if (rawElapsed >= _previewLogInterval.TotalSeconds)
                 {
                     var rawFps = _rawFramesProcessed / rawElapsed;
                     CrashLogger.Log($"PreviewFPS_RAW: {rawFps:F1} fps");
                     _rawFramesProcessed = 0;
-                    _rawFpsStartTime = now;
+                    _rawFpsStartTime = nowLog;
                 }
             }
             catch (Exception ex)
@@ -1514,7 +1532,7 @@ namespace KCMundial
             SkiaSharp.SKBitmap? originalBitmap = null;
             SkiaSharp.SKBitmap? alphaMask = null;
             SkiaSharp.SKBitmap? processedMask = null;
-            SkiaSharp.SKBitmap? finalMask = null;
+                SkiaSharp.SKBitmap? finalMask = null;
             SkiaSharp.SKBitmap? cutoutBitmap = null;
             SkiaSharp.SKImage? alphaImage = null;
             SkiaSharp.SKImage? cutoutImage = null;
@@ -1773,7 +1791,7 @@ namespace KCMundial
                     var maskInfo = new SkiaSharp.SKImageInfo(originalBitmap.Width, originalBitmap.Height, SkiaSharp.SKColorType.Alpha8, SkiaSharp.SKAlphaType.Opaque);
                     finalMask = processedMask.Resize(maskInfo, SkiaSharp.SKFilterQuality.High);
                     if (processedMask != alphaMask)
-                        processedMask.Dispose();
+                    processedMask.Dispose();
                 }
                 else
                 {
@@ -1887,10 +1905,10 @@ namespace KCMundial
                     {
                         alphaImage = SkiaSharp.SKImage.FromBitmap(finalMask);
                         alphaData = alphaImage.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                        using (var alphaStream = File.Create(alphaPath))
-                        {
-                            alphaData.SaveTo(alphaStream);
-                        }
+                using (var alphaStream = File.Create(alphaPath))
+                {
+                    alphaData.SaveTo(alphaStream);
+                }
                     }, linkedCt);
                 }
                 catch (Exception exSaveAlpha)
@@ -1907,10 +1925,10 @@ namespace KCMundial
                     {
                         cutoutImage = SkiaSharp.SKImage.FromBitmap(cutoutBitmap);
                         cutoutData = cutoutImage.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                        using (var cutoutStream = File.Create(cutoutPath))
-                        {
-                            cutoutData.SaveTo(cutoutStream);
-                        }
+                using (var cutoutStream = File.Create(cutoutPath))
+                {
+                    cutoutData.SaveTo(cutoutStream);
+                }
                     }, linkedCt);
                 }
                 catch (Exception exSaveCutout)
@@ -2887,7 +2905,7 @@ namespace KCMundial
                 cancellationToken.ThrowIfCancellationRequested();
                 CrashLogger.Log("CAP4_COLLAGE: CREATE_STICKER_BEGIN");
                 string stripPath = await _collageService.CreateStickerPaniniAsync(paniniBustBitmap, sessionPath, backgroundPath);
-                
+
                 // Limpiar
                 alphaMask.Dispose();
                 processedMask.Dispose();

@@ -76,25 +76,50 @@ namespace KCMundial.Services
             {
                 try
                 {
-                    // Usar ruta fija determinística
+                    // Usar ruta fija determinística: C:\KCMundial\Photos\Strips\
                     var stripsDir = GetStripsDirectory();
+                    
+                    // SIEMPRE crear directorio antes de guardar
+                    Directory.CreateDirectory(stripsDir);
+                    var dirExistsBefore = Directory.Exists(stripsDir);
+                    CrashLogger.Log($"CAP_SAVE_STRIP: dirBefore={stripsDir}, dirExists={dirExistsBefore}");
+                    
+                    if (!dirExistsBefore)
+                    {
+                        var ex = new DirectoryNotFoundException($"No se pudo crear directorio: {stripsDir}");
+                        CrashLogger.Log($"CAP_SAVE_FAIL: {ex.ToString()}", ex);
+                        throw ex;
+                    }
                     
                     var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                     var stripFileName = $"{timestamp}_strip.png";
                     var stripDestPath = Path.Combine(stripsDir, stripFileName);
                     
-                    CrashLogger.Log($"CAP_SAVE_STRIP: {stripDestPath}");
+                    CrashLogger.Log($"CAP_SAVE_STRIP: finalPath={stripDestPath}, sourceExists={File.Exists(sourceStripPath)}");
                     
                     if (File.Exists(sourceStripPath))
                     {
                         File.Copy(sourceStripPath, stripDestPath, overwrite: true);
-                        CrashLogger.Log($"STRIP saved: {stripDestPath}");
-                        CrashLogger.Log($"CAP_SAVE_STRIP: Guardado exitoso - {new FileInfo(stripDestPath).Length} bytes");
+                        
+                        // Verificar que el archivo se escribió correctamente
+                        var fileExistsAfter = File.Exists(stripDestPath);
+                        if (fileExistsAfter)
+                        {
+                            var fileInfo = new FileInfo(stripDestPath);
+                            CrashLogger.Log($"STRIP saved: {stripDestPath}");
+                            CrashLogger.Log($"CAP_SAVE_STRIP: Guardado exitoso - finalPath={stripDestPath}, dirExists={Directory.Exists(stripsDir)}, File.Exists={fileExistsAfter}, size={fileInfo.Length} bytes");
+                        }
+                        else
+                        {
+                            var ex = new Exception($"Archivo no existe después de escribir: {stripDestPath}");
+                            CrashLogger.Log($"CAP_SAVE_FAIL: {ex.ToString()}", ex);
+                            throw ex;
+                        }
                     }
                     else
                     {
                         var ex = new FileNotFoundException($"Archivo fuente no existe: {sourceStripPath}");
-                        CrashLogger.Log($"CAP_SAVE_FAIL: {ex.Message}", ex);
+                        CrashLogger.Log($"CAP_SAVE_FAIL: {ex.ToString()}", ex);
                         throw ex;
                     }
                     
@@ -102,8 +127,8 @@ namespace KCMundial.Services
                 }
                 catch (Exception ex)
                 {
-                    CrashLogger.Log($"CAP_SAVE_FAIL: Error en SaveStripAsync - {ex.Message}", ex);
-                    throw;
+                    CrashLogger.Log($"CAP_SAVE_FAIL: Error en SaveStripAsync - {ex.ToString()}", ex);
+                    throw; // NO tragar la excepción
                 }
             });
         }
@@ -137,10 +162,35 @@ namespace KCMundial.Services
                                 shotDestPath = Path.Combine(shotsDir, shotFileName);
                             }
                             
+                            // SIEMPRE crear directorio antes de copiar
+                            Directory.CreateDirectory(shotsDir);
+                            var dirExistsBefore = Directory.Exists(shotsDir);
+                            CrashLogger.Log($"CAP_SAVE_RAW: dirBefore={shotsDir}, dirExists={dirExistsBefore}");
+                            
+                            if (!dirExistsBefore)
+                            {
+                                var ex = new DirectoryNotFoundException($"No se pudo crear directorio: {shotsDir}");
+                                CrashLogger.Log($"CAP_SAVE_FAIL: {ex.ToString()}", ex);
+                                throw ex;
+                            }
+                            
                             File.Copy(photoPaths[i], shotDestPath, overwrite: true);
-                            savedPaths.Add(shotDestPath);
-                            CrashLogger.Log($"RAW saved: {shotDestPath}");
-                            CrashLogger.Log($"CAP_SAVE_RAW: {shotDestPath} ({new FileInfo(shotDestPath).Length} bytes)");
+                            
+                            // Verificar que el archivo se escribió correctamente
+                            var fileExistsAfter = File.Exists(shotDestPath);
+                            if (fileExistsAfter)
+                            {
+                                var fileInfo = new FileInfo(shotDestPath);
+                                savedPaths.Add(shotDestPath);
+                                CrashLogger.Log($"RAW saved: {shotDestPath}");
+                                CrashLogger.Log($"CAP_SAVE_RAW: Guardado exitoso - finalPath={shotDestPath}, dirExists={Directory.Exists(shotsDir)}, File.Exists={fileExistsAfter}, size={fileInfo.Length} bytes");
+                            }
+                            else
+                            {
+                                var ex = new Exception($"Archivo no existe después de copiar: {shotDestPath}");
+                                CrashLogger.Log($"CAP_SAVE_FAIL: {ex.ToString()}", ex);
+                                throw ex;
+                            }
                             
                             // Pequeño delay para evitar timestamps idénticos
                             System.Threading.Thread.Sleep(10);
@@ -172,12 +222,26 @@ namespace KCMundial.Services
             {
                 try
                 {
+                    // Usar ruta fija determinística: C:\KCMundial\Photos\Shots\
                     var shotsDir = GetShotsDirectory();
+                    
+                    // SIEMPRE crear directorio antes de guardar
+                    Directory.CreateDirectory(shotsDir);
+                    var dirExistsBefore = Directory.Exists(shotsDir);
+                    CrashLogger.Log($"CAP_SAVE_RAW: dirBefore={shotsDir}, dirExists={dirExistsBefore}");
+                    
+                    if (!dirExistsBefore)
+                    {
+                        var ex = new DirectoryNotFoundException($"No se pudo crear directorio: {shotsDir}");
+                        CrashLogger.Log($"CAP_SAVE_FAIL: {ex.ToString()}", ex);
+                        throw ex;
+                    }
+                    
                     var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                     var fileName = $"{timestamp}_raw.png";
                     var fullPath = Path.Combine(shotsDir, fileName);
                     
-                    CrashLogger.Log($"CAP_SAVE_RAW: {fullPath}");
+                    CrashLogger.Log($"CAP_SAVE_RAW: finalPath={fullPath}, bitmapSize={bitmap?.Width}x{bitmap?.Height}");
                     
                     using (var image = SkiaSharp.SKImage.FromBitmap(bitmap))
                     using (var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
@@ -186,14 +250,27 @@ namespace KCMundial.Services
                         data.SaveTo(stream);
                     }
                     
-                    CrashLogger.Log($"RAW saved: {fullPath}");
-                    CrashLogger.Log($"CAP_SAVE_RAW: Guardado exitoso - {new FileInfo(fullPath).Length} bytes");
+                    // Verificar que el archivo se escribió correctamente
+                    var fileExistsAfter = File.Exists(fullPath);
+                    if (fileExistsAfter)
+                    {
+                        var fileInfo = new FileInfo(fullPath);
+                        CrashLogger.Log($"RAW saved: {fullPath}");
+                        CrashLogger.Log($"CAP_SAVE_RAW: Guardado exitoso - finalPath={fullPath}, dirExists={Directory.Exists(shotsDir)}, File.Exists={fileExistsAfter}, size={fileInfo.Length} bytes");
+                    }
+                    else
+                    {
+                        var ex = new Exception($"Archivo no existe después de escribir: {fullPath}");
+                        CrashLogger.Log($"CAP_SAVE_FAIL: {ex.ToString()}", ex);
+                        throw ex;
+                    }
+                    
                     return fullPath;
                 }
                 catch (Exception ex)
                 {
-                    CrashLogger.Log($"CAP_SAVE_FAIL: Error en SaveRawPhotoAsync - {ex.Message}", ex);
-                    throw;
+                    CrashLogger.Log($"CAP_SAVE_FAIL: Error en SaveRawPhotoAsync - {ex.ToString()}", ex);
+                    throw; // NO tragar la excepción
                 }
             });
         }

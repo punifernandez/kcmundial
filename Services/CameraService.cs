@@ -456,8 +456,8 @@ namespace KCMundial.Services
                 var pixelData = await decoder.GetPixelDataAsync();
                 var pixels = pixelData.DetachPixelData();
 
-                // Usar InvokeAsync en lugar de Invoke para no bloquear
-                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                // Usar BeginInvoke para NO bloquear (asíncrono, no espera)
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     try
                     {
@@ -483,7 +483,7 @@ namespace KCMundial.Services
                     {
                         System.Diagnostics.Debug.WriteLine($"Error en UI thread: {exUI.Message}");
                     }
-                }, System.Windows.Threading.DispatcherPriority.Render);
+                }), System.Windows.Threading.DispatcherPriority.Render);
                 
                 converted?.Dispose();
             }

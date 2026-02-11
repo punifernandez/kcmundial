@@ -446,10 +446,10 @@ namespace KCMundial
         private void OnRawPreviewFrameUpdated(object? sender, BitmapSource frame)
         {
             // Ya estamos en UI thread desde Dispatcher.InvokeAsync
-            if (frame != null)
+                if (frame != null)
             {
                 PreviewImage.Source = frame;
-                PreviewImage.Visibility = Visibility.Visible;
+                    PreviewImage.Visibility = Visibility.Visible;
             }
         }
         

@@ -29,18 +29,18 @@ namespace KCMundial.Services
                     return _logPath;
                 }
 
-                // Ruta principal: %LOCALAPPDATA%\KCMundial\Logs\KCMundial_crashlog.txt
+                // Ruta principal: C:\KCMundial\Logs\KCMundial_crashlog.txt (ruta fija)
                 string? primaryPath = null;
                 try
                 {
-                    var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                    var logDir = Path.Combine(localAppData, "KCMundial", "Logs");
+                    const string BasePath = @"C:\KCMundial";
+                    var logDir = Path.Combine(BasePath, "Logs");
                     Directory.CreateDirectory(logDir);
                     primaryPath = Path.Combine(logDir, "KCMundial_crashlog.txt");
                 }
                 catch (Exception ex)
                 {
-                    _lastError = $"Failed to create LOCALAPPDATA path: {ex.Message}";
+                    _lastError = $"Failed to create fixed log path: {ex.Message}";
                 }
 
                 // Si falla, fallback a Temp
