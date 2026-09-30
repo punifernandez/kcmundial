@@ -21,7 +21,7 @@
         </Grid>
 
         <!-- Resultado: figurita + QR -->
-        <Grid Background="{StaticResource AppBackgroundBrush}">
+        <Grid Background="{DynamicResource AppBackgroundBrush}">
             <Grid.Style>
                 <Style TargetType="Grid" BasedOn="{StaticResource ModePanel}">
                     <Style.Triggers>
@@ -40,31 +40,31 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Background="White" Padding="12" CornerRadius="20" HorizontalAlignment="Center" VerticalAlignment="Center" Height="980">
+                    <Border Grid.Column="0" Background="{DynamicResource PhotoMatBrush}" Padding="12" CornerRadius="4" HorizontalAlignment="Center" VerticalAlignment="Center" Height="980">
                         <Border.Effect>
                             <DropShadowEffect Color="Black" BlurRadius="60" ShadowDepth="14" Opacity="0.55"/>
                         </Border.Effect>
                         <Image Source="{Binding FiguritaImage}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="UNIDOS X UNA PASIÓN" Style="{StaticResource Eyebrow}" FontSize="40"/>
-                        <TextBlock Text="¡Llevate tu foto!" Style="{StaticResource Display}" FontSize="120"/>
-                        <Border Width="440" Height="440" Background="White" CornerRadius="32" Padding="16" Margin="0,40,0,28">
+                        <TextBlock Text="{DynamicResource Text.Eyebrow}" Style="{StaticResource Eyebrow}" FontSize="40"/>
+                        <TextBlock Text="{DynamicResource Text.SecondScreenTitle}" Style="{StaticResource Display}" FontSize="120"/>
+                        <Border Width="440" Height="440" Background="White" CornerRadius="8" Padding="16" Margin="0,40,0,28">
                             <Grid>
                                 <Image Source="{Binding QrImage}" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-                                <Control Style="{StaticResource Spinner}" Width="110" Height="110" Foreground="{StaticResource NavyBrush}"
+                                <Control Style="{StaticResource Spinner}" Width="110" Height="110" Foreground="{DynamicResource SurfaceSolidBrush}"
                                          Visibility="{Binding QrImage, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
                             </Grid>
                         </Border>
                         <TextBlock Text="Escaneá el código con tu celular" Style="{StaticResource TitleMedium}" FontSize="44" HorizontalAlignment="Center"
-                                   Foreground="{StaticResource CelesteLightBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
                 </Grid>
             </Viewbox>
         </Grid>
 
         <!-- Galería: foto grande -->
-        <Grid Background="{StaticResource AppBackgroundBrush}">
+        <Grid Background="{DynamicResource AppBackgroundBrush}">
             <Grid.Style>
                 <Style TargetType="Grid" BasedOn="{StaticResource ModePanel}">
                     <Style.Triggers>
@@ -77,7 +77,7 @@
                     </Style.Triggers>
                 </Style>
             </Grid.Style>
-            <Border Background="White" Padding="12" CornerRadius="20" Margin="60" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border Background="{DynamicResource PhotoMatBrush}" Padding="12" CornerRadius="4" Margin="60" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Image Source="{Binding FiguritaImage}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Border>
         </Grid>

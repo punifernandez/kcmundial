@@ -12,6 +12,8 @@ public sealed class AppSettings
 {
     public const string FileName = "kcmundial.settings.json";
 
+    /// <summary>Tema visual: "mundialista" o "plano".</summary>
+    public string Theme { get; set; } = "mundialista";
     /// <summary>Rotación horaria para enderezar la imagen de la cámara: 0, 90, 180 o 270.
     /// Brio apaisada (normal): 0. Montada vertical: 90 o 270.</summary>
     public int CameraRotation { get; set; } = 0;
@@ -62,6 +64,16 @@ public sealed class AppSettings
         DefaultIgnoreCondition = JsonIgnoreCondition.Never
     };
 
+    private string? _path;
+
+    /// <summary>Guarda la configuración (por ejemplo, al cambiar el tema desde el panel del operador).</summary>
+    public void Save(IAppLogger? logger = null)
+    {
+        if (_path == null) return;
+        try { File.WriteAllText(_path, JsonSerializer.Serialize(this, JsonOptions)); }
+        catch (Exception ex) { logger?.Warn($"Settings: could not write {_path}: {ex.Message}"); }
+    }
+
     public static AppSettings Load(string folder, IAppLogger? logger)
     {
         var path = Path.Combine(folder, FileName);
@@ -75,9 +87,11 @@ public sealed class AppSettings
         catch (Exception ex)
         {
             logger?.Warn($"Settings: could not read {path} ({ex.Message}), using defaults");
-            return new AppSettings();
+            return new AppSettings { _path = path };
         }
 
+        settings._path = path;
+        settings.Theme = ThemeManager.Normalize(settings.Theme);
         settings.CountdownSeconds = Math.Clamp(settings.CountdownSeconds, 1, 10);
         settings.PrintCopies = Math.Clamp(settings.PrintCopies, 1, 5);
         settings.PrintPageWidthInches = Math.Clamp(settings.PrintPageWidthInches, 1, 12);

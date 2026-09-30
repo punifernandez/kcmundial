@@ -6,19 +6,20 @@
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
              mc:Ignorable="d" d:DesignHeight="1920" d:DesignWidth="1080">
     <UserControl.Resources>
-        <!-- Miniatura de marco: se agranda y brilla cuando está elegida -->
+        <!-- Marco a elegir: tarjeta con número grande; la elegida con borde dorado y un poco más grande -->
         <Style x:Key="FrameChoice" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-            <Setter Property="Margin" Value="14,0"/>
+            <Setter Property="Margin" Value="12,0"/>
+            <Setter Property="MinHeight" Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="ring" Width="132" Height="198" CornerRadius="18" BorderThickness="4"
-                                BorderBrush="{StaticResource GlassBorderBrush}" Background="{StaticResource GlassBrush}" Padding="4"
+                        <Border x:Name="ring" Width="150" Height="210" CornerRadius="6" BorderThickness="5"
+                                BorderBrush="{DynamicResource FrameIdleBorderBrush}" Background="{DynamicResource SurfaceSolidBrush}"
                                 RenderTransformOrigin="0.5,0.5">
                             <Border.RenderTransform>
                                 <ScaleTransform x:Name="scale"/>
                             </Border.RenderTransform>
-                            <Border CornerRadius="12" ClipToBounds="True">
+                            <Border CornerRadius="2" ClipToBounds="True">
                                 <ContentPresenter/>
                             </Border>
                         </Border>
@@ -27,25 +28,20 @@
                                 <Trigger.Value>
                                     <sys:Boolean>True</sys:Boolean>
                                 </Trigger.Value>
-                                <Setter TargetName="ring" Property="BorderBrush" Value="{StaticResource GoldBrush}"/>
-                                <Setter TargetName="ring" Property="Effect">
-                                    <Setter.Value>
-                                        <DropShadowEffect Color="#F6B40E" BlurRadius="30" ShadowDepth="0" Opacity="0.7"/>
-                                    </Setter.Value>
-                                </Setter>
+                                <Setter TargetName="ring" Property="BorderBrush" Value="{DynamicResource FrameSelectedBorderBrush}"/>
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleX" To="1.08" Duration="0:0:0.18"/>
-                                            <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleY" To="1.08" Duration="0:0:0.18"/>
+                                            <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleX" To="1.08" Duration="0:0:0.15"/>
+                                            <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleY" To="1.08" Duration="0:0:0.15"/>
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </Trigger.EnterActions>
                                 <Trigger.ExitActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.18"/>
-                                            <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.18"/>
+                                            <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.15"/>
+                                            <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.15"/>
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </Trigger.ExitActions>
@@ -56,43 +52,18 @@
             </Setter>
         </Style>
 
-        <!-- Disparador: disco dorado con anillo que "late" -->
-        <Style x:Key="ShutterButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Grid Width="190" Height="190">
-                            <Ellipse x:Name="pulse" Stroke="{StaticResource GoldBrush}" StrokeThickness="3" RenderTransformOrigin="0.5,0.5" Opacity="0.8">
-                                <Ellipse.RenderTransform>
-                                    <ScaleTransform x:Name="pulseScale"/>
-                                </Ellipse.RenderTransform>
-                            </Ellipse>
-                            <Ellipse Margin="14" Stroke="#66FFFFFF" StrokeThickness="4"/>
-                            <Ellipse Margin="26" Fill="{StaticResource GoldGradientBrush}">
-                                <Ellipse.Effect>
-                                    <DropShadowEffect Color="#F6B40E" BlurRadius="40" ShadowDepth="0" Opacity="0.6"/>
-                                </Ellipse.Effect>
-                            </Ellipse>
-                            <Path Data="{StaticResource IconCamera}" Fill="{StaticResource NavyDeepBrush}" Width="62" Height="62" Stretch="Uniform"/>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="Loaded">
-                                <BeginStoryboard>
-                                    <Storyboard RepeatBehavior="Forever">
-                                        <DoubleAnimation Storyboard.TargetName="pulseScale" Storyboard.TargetProperty="ScaleX" From="0.86" To="1.12" Duration="0:0:1.4"/>
-                                        <DoubleAnimation Storyboard.TargetName="pulseScale" Storyboard.TargetProperty="ScaleY" From="0.86" To="1.12" Duration="0:0:1.4"/>
-                                        <DoubleAnimation Storyboard.TargetName="pulse" Storyboard.TargetProperty="Opacity" From="0.9" To="0" Duration="0:0:1.4"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+        <!-- Número del marco, estilo dorsal -->
+        <Style x:Key="FrameNumber" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource HeaderPanelBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="MinWidth" Value="44"/>
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="CornerRadius" Value="4,0,0,0"/>
         </Style>
     </UserControl.Resources>
 
-    <Grid Background="{StaticResource AppBackgroundBrush}">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -101,21 +72,30 @@
         </Grid.RowDefinitions>
 
         <!-- Encabezado -->
-        <Grid Grid.Row="0" Margin="40,32,40,8">
-            <StackPanel HorizontalAlignment="Center">
-                <TextBlock Text="UNIDOS X UNA PASIÓN" Style="{StaticResource Eyebrow}" FontSize="24"/>
-                <TextBlock Text="¡Sacate tu figurita!" Style="{StaticResource Display}" FontSize="58" Margin="0,2,0,0"/>
-            </StackPanel>
-            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Style="{StaticResource RoundIconButton}"
-                    Command="{Binding ToggleAdminPanelCommand}" ToolTip="Operador">
-                <Path Data="{StaticResource IconCog}" Style="{StaticResource Icon}"/>
-            </Button>
-        </Grid>
+        <Border Grid.Row="0" Style="{StaticResource HeaderPanel}" Margin="48,40,48,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource Text.Eyebrow}" Style="{StaticResource Eyebrow}" FontSize="24"/>
+                    <TextBlock Text="{DynamicResource Text.MainTitle}" Style="{StaticResource Display}" FontSize="58" Margin="0,-4,0,0"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="★★★" Foreground="{DynamicResource GoldBrush}" FontSize="34" VerticalAlignment="Center" Margin="0,0,20,0"
+                           Visibility="{DynamicResource StarsVisibility}"/>
+                <Button Grid.Column="2" Style="{StaticResource SquareIconButton}" Command="{Binding ToggleAdminPanelCommand}" VerticalAlignment="Center" ToolTip="Operador">
+                    <Path Data="{StaticResource IconCog}" Style="{StaticResource Icon}"/>
+                </Button>
+            </Grid>
+        </Border>
 
         <!-- Preview en vivo con el marco (misma proporción que la foto final) -->
-        <Border Grid.Row="1" Style="{StaticResource GlassCard}" Padding="12" Margin="56,16,56,12" HorizontalAlignment="Center">
+        <Border Grid.Row="1" Margin="64,28,64,16" HorizontalAlignment="Center" BorderBrush="{DynamicResource PhotoMatBrush}" BorderThickness="6" CornerRadius="6"
+                Background="{DynamicResource PreviewBackdropBrush}">
             <Viewbox Stretch="Uniform">
-                <Grid Width="{Binding PreviewBoxWidth}" Height="{Binding PreviewBoxHeight}" ClipToBounds="True" Background="{StaticResource NavyDeepBrush}">
+                <Grid Width="{Binding PreviewBoxWidth}" Height="{Binding PreviewBoxHeight}" ClipToBounds="True" Background="{DynamicResource PreviewBackdropBrush}">
                     <Grid RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
                             <ScaleTransform ScaleX="{Binding PreviewMirrorScale}"/>
@@ -129,57 +109,60 @@
                     </Grid>
                     <Image Source="{Binding PreviewFrameOverlay}" Stretch="Fill" IsHitTestVisible="False"/>
 
-                    <!-- Esperando la cámara / error -->
-                    <Grid Background="{StaticResource NavyDeepBrush}"
+                    <!-- Esperando la cámara -->
+                    <Grid Background="{DynamicResource PreviewBackdropBrush}"
                           Visibility="{Binding IsCameraReady, Converter={StaticResource InverseBoolToVisibility}}">
-                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="60">
-                            <Control Style="{StaticResource Spinner}" Width="90" Height="90"
-                                     Visibility="{Binding CameraError, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
-                            <TextBlock Text="Conectando la cámara…" Style="{StaticResource TitleLarge}" FontSize="44" HorizontalAlignment="Center" Margin="0,28,0,0"
-                                       Visibility="{Binding CameraError, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="60"
+                                    Visibility="{Binding CameraError, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}">
+                            <Control Style="{StaticResource Spinner}" Width="90" Height="90"/>
+                            <TextBlock Text="Conectando la cámara…" Style="{StaticResource TitleLarge}" FontSize="44" HorizontalAlignment="Center" Margin="0,28,0,0"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- Indicación de posición -->
-                    <Border Style="{StaticResource Pill}" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,190"
+                    <Border Style="{StaticResource Chip}" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,190"
                             Visibility="{Binding GuidanceMessage, Converter={StaticResource NullToVisibility}}">
-                        <TextBlock Text="{Binding GuidanceMessage}" Style="{StaticResource TitleLarge}" FontSize="44"/>
+                        <TextBlock Text="{Binding GuidanceMessage}" Style="{StaticResource TitleLarge}" FontSize="44" Foreground="{DynamicResource ChipTextBrush}"/>
                     </Border>
 
-                    <!-- Cuenta regresiva -->
-                    <Grid Background="#5506132A" Visibility="{Binding IsCountdownVisible, Converter={StaticResource BoolToVisibility}}">
-                        <Ellipse Width="420" Height="420" Fill="#99061328" Stroke="{StaticResource GoldBrush}" StrokeThickness="10"/>
-                        <TextBlock x:Name="CountdownText" Text="{Binding CountdownNumber, NotifyOnTargetUpdated=True}"
-                                   Style="{StaticResource Display}" FontSize="300" Foreground="{StaticResource GoldBrush}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-30,0,0" RenderTransformOrigin="0.5,0.5">
-                            <TextBlock.RenderTransform>
-                                <ScaleTransform/>
-                            </TextBlock.RenderTransform>
-                            <TextBlock.Triggers>
-                                <EventTrigger RoutedEvent="Binding.TargetUpdated">
-                                    <BeginStoryboard>
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="1.6" To="1" Duration="0:0:0.35">
-                                                <DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.4"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="1.6" To="1" Duration="0:0:0.35">
-                                                <DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.4"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.2"/>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-                            </TextBlock.Triggers>
-                        </TextBlock>
-                        <TextBlock Text="¡MIRÁ A LA CÁMARA!" Style="{StaticResource Display}" FontSize="64" VerticalAlignment="Bottom" Margin="0,0,0,120"/>
+                    <!-- Cuenta regresiva: marcador -->
+                    <Grid Background="#40000000" Visibility="{Binding IsCountdownVisible, Converter={StaticResource BoolToVisibility}}">
+                        <Border Width="400" Height="400" Background="{DynamicResource CountdownPanelBrush}" BorderBrush="{DynamicResource CountdownBorderBrush}"
+                                BorderThickness="10" CornerRadius="{DynamicResource CountdownCornerRadius}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CountdownNumber, NotifyOnTargetUpdated=True}" Style="{StaticResource Display}" FontSize="300"
+                                       Foreground="{DynamicResource CountdownTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Margin="0,-30,0,0" RenderTransformOrigin="0.5,0.5">
+                                <TextBlock.RenderTransform>
+                                    <ScaleTransform/>
+                                </TextBlock.RenderTransform>
+                                <TextBlock.Triggers>
+                                    <EventTrigger RoutedEvent="Binding.TargetUpdated">
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="1.5" To="1" Duration="0:0:0.3">
+                                                    <DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.4"/></DoubleAnimation.EasingFunction>
+                                                </DoubleAnimation>
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="1.5" To="1" Duration="0:0:0.3">
+                                                    <DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.4"/></DoubleAnimation.EasingFunction>
+                                                </DoubleAnimation>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.2"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </TextBlock.Triggers>
+                            </TextBlock>
+                        </Border>
+                        <Border Style="{StaticResource Chip}" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,110">
+                            <TextBlock Text="{DynamicResource Text.CountdownHint}" Style="{StaticResource Display}" FontSize="56" Foreground="{DynamicResource ChipTextBrush}"/>
+                        </Border>
                     </Grid>
 
                     <!-- Armando la foto -->
-                    <Grid Background="{StaticResource ScrimBrush}" Visibility="{Binding IsProcessingVisible, Converter={StaticResource BoolToVisibility}}">
+                    <Grid Background="{DynamicResource ScrimBrush}" Visibility="{Binding IsProcessingVisible, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <Control Style="{StaticResource Spinner}" Width="120" Height="120" Foreground="{StaticResource GoldBrush}"/>
-                            <TextBlock Text="¡Qué buena foto!" Style="{StaticResource Display}" FontSize="80" Margin="0,40,0,0"/>
-                            <TextBlock Text="Estamos armando tu figurita" Style="{StaticResource Caption}" FontSize="36" HorizontalAlignment="Center"/>
+                            <Control Style="{StaticResource Spinner}" Width="120" Height="120"/>
+                            <TextBlock Text="{DynamicResource Text.Processing}" Style="{StaticResource Display}" FontSize="84" Margin="0,40,0,0" HorizontalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Text.ProcessingSub}" Style="{StaticResource Caption}" FontSize="36" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
 
@@ -190,65 +173,105 @@
         </Border>
 
         <!-- Error -->
-        <Border Grid.Row="1" Style="{StaticResource Pill}" Background="#E6FF5A6A" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,40,0,0"
+        <Border Grid.Row="1" Style="{StaticResource Chip}" Background="{DynamicResource DangerBrush}" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,44,0,0"
                 Visibility="{Binding CameraError, Converter={StaticResource NullToVisibility}}">
             <StackPanel Orientation="Horizontal">
                 <Path Data="{StaticResource IconAlert}" Fill="White" Width="26" Height="26" Stretch="Uniform" Margin="0,0,12,0"/>
-                <TextBlock Text="{Binding CameraError}" Style="{StaticResource Body}" FontSize="20" VerticalAlignment="Center" MaxWidth="700"/>
+                <TextBlock Text="{Binding CameraError}" Style="{StaticResource Body}" Foreground="White" FontSize="20" VerticalAlignment="Center" MaxWidth="700"/>
             </StackPanel>
         </Border>
 
-        <!-- Elegí tu marco -->
+        <!-- Elegí tu marco / camiseta -->
         <StackPanel Grid.Row="2" Margin="0,8,0,0" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">
-            <TextBlock Text="ELEGÍ TU MARCO" Style="{StaticResource Eyebrow}" Margin="0,0,0,16"/>
+            <TextBlock Text="{DynamicResource Text.FrameLabel}" Style="{StaticResource Eyebrow}" FontSize="26" HorizontalAlignment="Center" Margin="0,0,0,18"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="1" Tag="{Binding IsFrame1Selected}">
-                    <Image Source="{Binding FrameThumbnail1}" Stretch="UniformToFill"/>
+                    <Grid>
+                        <Image Source="{Binding FrameThumbnail1}" Stretch="UniformToFill"/>
+                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="1" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource GoldBrush}" HorizontalAlignment="Center"/></Border>
+                    </Grid>
                 </Button>
                 <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="2" Tag="{Binding IsFrame2Selected}">
-                    <Image Source="{Binding FrameThumbnail2}" Stretch="UniformToFill"/>
+                    <Grid>
+                        <Image Source="{Binding FrameThumbnail2}" Stretch="UniformToFill"/>
+                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="2" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource GoldBrush}" HorizontalAlignment="Center"/></Border>
+                    </Grid>
                 </Button>
                 <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="3" Tag="{Binding IsFrame3Selected}">
-                    <Image Source="{Binding FrameThumbnail3}" Stretch="UniformToFill"/>
+                    <Grid>
+                        <Image Source="{Binding FrameThumbnail3}" Stretch="UniformToFill"/>
+                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="3" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource GoldBrush}" HorizontalAlignment="Center"/></Border>
+                    </Grid>
                 </Button>
             </StackPanel>
         </StackPanel>
 
-        <!-- Disparador -->
-        <StackPanel Grid.Row="3" Margin="0,24,0,48" HorizontalAlignment="Center">
-            <Button Style="{StaticResource ShutterButton}" Command="{Binding CaptureCommand}" HorizontalAlignment="Center"
-                    Visibility="{Binding IsBusy, Converter={StaticResource InverseBoolToVisibility}}"/>
-            <TextBlock Text="TOCÁ PARA SACAR LA FOTO" Style="{StaticResource Eyebrow}" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,10,0,0"
-                       Visibility="{Binding IsBusy, Converter={StaticResource InverseBoolToVisibility}}"/>
-            <!-- Mantiene el alto mientras el botón está oculto -->
-            <Border Height="228" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
-        </StackPanel>
+        <!-- Disparador: bloque de ancho completo -->
+        <Grid Grid.Row="3" Margin="64,36,64,56" Height="130">
+            <Button Style="{StaticResource PrimaryButton}" Command="{Binding CaptureCommand}" BorderThickness="4"
+                    Visibility="{Binding IsBusy, Converter={StaticResource InverseBoolToVisibility}}">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{DynamicResource ShutterIcon}" Fill="{DynamicResource PrimaryButtonTextBrush}" Width="56" Height="56" Stretch="Uniform" Margin="0,0,20,0"/>
+                    <TextBlock Text="{DynamicResource Text.Shutter}" FontSize="48" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
 
         <!-- Panel del operador -->
         <Grid Grid.RowSpan="4" Visibility="{Binding IsAdminPanelOpen, Converter={StaticResource BoolToVisibility}}">
-            <Rectangle Fill="#8006132A">
+            <Rectangle Fill="#99000000">
                 <Rectangle.InputBindings>
                     <MouseBinding MouseAction="LeftClick" Command="{Binding ToggleAdminPanelCommand}"/>
                 </Rectangle.InputBindings>
             </Rectangle>
-            <Border Style="{StaticResource GlassCard}" Background="{StaticResource NavyBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,100,40,0" Width="440" Padding="28">
+            <Border Style="{StaticResource Card}" Background="{DynamicResource SurfaceSolidBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,130,48,0" Width="460" Padding="28">
                 <StackPanel>
-                    <TextBlock Text="OPERADOR" Style="{StaticResource Eyebrow}" HorizontalAlignment="Left" TextAlignment="Left"/>
+                    <TextBlock Text="OPERADOR" Style="{StaticResource Eyebrow}"/>
+
                     <TextBlock Text="Cámara" Style="{StaticResource Caption}" Margin="0,18,0,8"/>
                     <ComboBox x:Name="CameraComboBox" ItemsSource="{Binding Cameras}" SelectedItem="{Binding SelectedCamera, Mode=OneWay}"
                               DisplayMemberPath="DisplayName" Style="{StaticResource ModernComboBox}" DropDownClosed="CameraComboBox_DropDownClosed"/>
                     <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0">
                         <Run Text="Activa:"/> <Run Text="{Binding ActiveCameraDisplayName, Mode=OneWay}"/>
                     </TextBlock>
-                    <TextBlock Text="Impresoras" Style="{StaticResource Caption}" Margin="0,24,0,8"/>
-                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureSmallPrinterCommand}" HorizontalAlignment="Stretch" FontSize="20">
+
+                    <TextBlock Text="Tema" Style="{StaticResource Caption}" Margin="0,22,0,8"/>
+                    <UniformGrid Columns="2">
+                        <Button Command="{Binding SetThemeCommand}" CommandParameter="mundialista" Margin="0,0,6,0" MinHeight="56" FontSize="22">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsThemeMundialista}" Value="True">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            Mundialista
+                        </Button>
+                        <Button Command="{Binding SetThemeCommand}" CommandParameter="plano" Margin="6,0,0,0" MinHeight="56" FontSize="22">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsThemePlano}" Value="True">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            Plano
+                        </Button>
+                    </UniformGrid>
+
+                    <TextBlock Text="Impresoras" Style="{StaticResource Caption}" Margin="0,22,0,8"/>
+                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureSmallPrinterCommand}" MinHeight="56" FontSize="22">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
                             <TextBlock Text="Configurar impresora figurita" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureXlPrinterCommand}" Margin="0,10,0,0" HorizontalAlignment="Stretch" FontSize="20">
+                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureXlPrinterCommand}" Margin="0,10,0,0" MinHeight="56" FontSize="22">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
                             <TextBlock Text="Configurar impresora XL" VerticalAlignment="Center"/>
@@ -256,13 +279,14 @@
                     </Button>
                     <TextBlock Text="{Binding AdminMessage}" Style="{StaticResource Caption}" Margin="0,8,0,0"
                                Visibility="{Binding AdminMessage, Converter={StaticResource NullToVisibility}}"/>
-                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding OpenGalleryCommand}" Margin="0,24,0,0" HorizontalAlignment="Stretch">
+
+                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding OpenGalleryCommand}" Margin="0,22,0,0" MinHeight="56" FontSize="22">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconGallery}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
                             <TextBlock Text="Galería" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource DangerButton}" Command="{Binding CloseAppCommand}" Margin="0,12,0,0" HorizontalAlignment="Stretch">
+                    <Button Style="{StaticResource DangerButton}" Command="{Binding CloseAppCommand}" Margin="0,10,0,0" MinHeight="56" FontSize="22">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconClose}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
                             <TextBlock Text="Cerrar la app" VerticalAlignment="Center"/>

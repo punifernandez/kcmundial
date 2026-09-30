@@ -2,9 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="KCMundial 2" WindowStyle="None" ResizeMode="NoResize" Topmost="True"
-        Background="{StaticResource NavyDeepBrush}" FontFamily="{StaticResource BodyFont}"
+        Background="{DynamicResource AppBackgroundBrush}" FontFamily="{StaticResource BodyFont}"
         UseLayoutRounding="True">
     <Grid>
+        <Control Template="{DynamicResource BackgroundDecoration}" Focusable="False" IsTabStop="False"/>
         <!-- Transición suave entre pantallas -->
         <ContentControl Content="{Binding CurrentViewModel, NotifyOnTargetUpdated=True}">
             <ContentControl.Style>
@@ -23,15 +24,15 @@
         </ContentControl>
 
         <!-- Confirmación de salida -->
-        <Grid Background="{StaticResource ScrimBrush}" Visibility="{Binding ShowCloseConfirmOverlay, Converter={StaticResource BoolToVisibility}}">
-            <Border Style="{StaticResource GlassCard}" Background="{StaticResource NavyBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"
-                    Padding="48,40" MinWidth="520">
+        <Grid Background="{DynamicResource ScrimBrush}" Visibility="{Binding ShowCloseConfirmOverlay, Converter={StaticResource BoolToVisibility}}">
+            <Border Style="{StaticResource Card}" Background="{DynamicResource SurfaceSolidBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Padding="48,40" MinWidth="560">
                 <StackPanel>
                     <TextBlock Text="¿Cerrar la aplicación?" Style="{StaticResource TitleLarge}" FontSize="40" HorizontalAlignment="Center"/>
                     <TextBlock Text="El photobooth deja de funcionar hasta que la vuelvas a abrir." Style="{StaticResource Caption}" FontSize="18"
                                HorizontalAlignment="Center" TextAlignment="Center" Margin="0,10,0,32"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Button Content="NO, SEGUIR" Command="{Binding ConfirmCloseNoCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,16,0"/>
+                        <Button Content="NO, SEGUIR" Command="{Binding ConfirmCloseNoCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,16,0" FontSize="26"/>
                         <Button Content="SÍ, CERRAR" Command="{Binding ConfirmCloseYesCommand}" Style="{StaticResource DangerButton}"/>
                     </StackPanel>
                 </StackPanel>

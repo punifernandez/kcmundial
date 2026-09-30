@@ -10,6 +10,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/AppTheme.xaml"/>
+                <ResourceDictionary Source="Themes/Mundialista.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
             <conv:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True"/>
@@ -17,14 +18,15 @@
             <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
             <!-- Estado de una impresión (figurita o XL): ícono + texto. Oculto hasta que se imprime algo. -->
             <DataTemplate x:Key="PrintStatusTemplate" DataType="{x:Type vm:PrintJobViewModel}">
-                <Border Style="{StaticResource Pill}" HorizontalAlignment="Left" Padding="18,10" Margin="0,6,0,0"
+                <Border Background="{DynamicResource StatusRowBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1.5,0,0"
+                        CornerRadius="2" Padding="12,10" Margin="0,4,0,0"
                         Visibility="{Binding StatusMessage, Converter={StaticResource NullToVisibility}}">
                     <StackPanel Orientation="Horizontal">
-                        <Control Style="{StaticResource Spinner}" Width="26" Height="26" Foreground="{StaticResource GoldBrush}" Margin="0,0,12,0"
+                        <Control Style="{StaticResource Spinner}" Width="26" Height="26" Margin="0,0,12,0"
                                  Visibility="{Binding IsPrinting, Converter={StaticResource BoolToVisibility}}"/>
-                        <Path Data="{StaticResource IconCheck}" Fill="{StaticResource SuccessBrush}" Width="28" Height="28" Stretch="Uniform" Margin="0,0,12,0"
+                        <Path Data="{StaticResource IconCheck}" Fill="{DynamicResource SuccessBrush}" Width="28" Height="28" Stretch="Uniform" Margin="0,0,12,0"
                               Visibility="{Binding IsDone, Converter={StaticResource BoolToVisibility}}"/>
-                        <Path Data="{StaticResource IconAlert}" Fill="{StaticResource DangerBrush}" Width="28" Height="28" Stretch="Uniform" Margin="0,0,12,0"
+                        <Path Data="{StaticResource IconAlert}" Fill="{DynamicResource DangerBrush}" Width="28" Height="28" Stretch="Uniform" Margin="0,0,12,0"
                               Visibility="{Binding IsError, Converter={StaticResource BoolToVisibility}}"/>
                         <TextBlock Style="{StaticResource Body}" FontSize="20" VerticalAlignment="Center" MaxWidth="520">
                             <Run Text="{Binding Label, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=": "/><Run Text="{Binding StatusMessage, Mode=OneWay}"/>

@@ -32,6 +32,7 @@ public partial class App : Application
         };
 
         var settings = AppSettings.Load(pathResolver.RootInstallPath, _logger);
+        ThemeManager.Apply(settings.Theme);
         _cameraManager = new FallbackCameraManager(_logger);
 
         var haar = new FaceDetector(Path.Combine(pathResolver.AssetsFolder, "haarcascade_frontalface_default.xml"));
