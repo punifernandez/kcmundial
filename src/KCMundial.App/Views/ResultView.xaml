@@ -81,32 +81,23 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
-                    <ContentControl Content="{Binding Small}" ContentTemplate="{StaticResource PrintStatusTemplate}" Focusable="False"/>
-                    <ContentControl Content="{Binding Xl}" ContentTemplate="{StaticResource PrintStatusTemplate}" Focusable="False"/>
+                    <ContentControl Content="{Binding Print}" ContentTemplate="{StaticResource PrintStatusTemplate}" Focusable="False"/>
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- Acciones: sin tiempo, la pantalla espera a que el invitado elija -->
         <StackPanel Grid.Row="3" Margin="64,24,64,56">
-            <UniformGrid Columns="2">
-                <Button Style="{StaticResource SecondaryButton}" Command="{Binding Small.PrintCommand}" Margin="0,0,8,0">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
-                        <TextBlock Text="IMPRIMIR OTRA" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button Style="{StaticResource AccentButton}" Command="{Binding Xl.PrintCommand}" Margin="8,0,0,0">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="{DynamicResource XlIcon}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
-                        <TextBlock Text="IMPRIMIR XL" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-            </UniformGrid>
+            <Button Style="{StaticResource SecondaryButton}" Command="{Binding Print.PrintCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
+                    <TextBlock Text="IMPRIMIR DE NUEVO" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
             <Button Style="{StaticResource PrimaryButton}" Command="{Binding BackCommand}" Margin="0,16,0,0" MinHeight="110" BorderThickness="4">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource IconCamera}" Fill="{DynamicResource PrimaryButtonTextBrush}" Width="44" Height="44" Stretch="Uniform" Margin="0,0,18,0"/>
-                    <TextBlock Text="TOMAR OTRA FOTO" FontSize="42" VerticalAlignment="Center"/>
+                    <TextBlock Text="TOMAR NUEVA FOTO" FontSize="42" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
         </StackPanel>

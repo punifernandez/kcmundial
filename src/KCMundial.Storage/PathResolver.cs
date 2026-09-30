@@ -1,4 +1,5 @@
 using KCMundial.Core.Interfaces;
+using KCMundial.Core.Models;
 
 namespace KCMundial.Storage;
 
@@ -12,11 +13,22 @@ public sealed class PathResolver : IPathResolver
     public string Ampliaciones20x30Folder => Path.Combine(RootInstallPath, "ampliaciones_20x30");
     public string AssetsFolder => Path.Combine(RootInstallPath, "assets");
 
-    /// <summary>Marco seleccionable por el usuario (1, 2 o 3). Devuelve ruta a Fondo_N.png.</summary>
-    public string GetFramePath(int frameIndex)
+    private const int MaxFrames = 6;
+
+    /// <summary>Marco N del formato: Fondo_N.png (figurita, vertical) o Grande_N.png (foto grande, apaisada).</summary>
+    public string GetFramePath(PhotoFormat format, int frameIndex)
     {
-        var n = Math.Clamp(frameIndex, 1, 3);
-        return Path.Combine(AssetsFolder, $"Fondo_{n}.png");
+        var n = Math.Clamp(frameIndex, 1, MaxFrames);
+        var prefix = format == PhotoFormat.Grande ? "Grande" : "Fondo";
+        return Path.Combine(AssetsFolder, $"{prefix}_{n}.png");
+    }
+
+    public int GetFrameCount(PhotoFormat format)
+    {
+        var count = 0;
+        while (count < MaxFrames && File.Exists(GetFramePath(format, count + 1)))
+            count++;
+        return count;
     }
 
     public PathResolver(string? rootInstallPath = null)

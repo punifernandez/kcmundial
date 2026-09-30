@@ -88,6 +88,11 @@
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
+                            <Border Background="{DynamicResource AccentBrush}" CornerRadius="4" Padding="10,2" Margin="18,18,0,0"
+                                    HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"
+                                    Visibility="{Binding IsGrande, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="A4" Style="{StaticResource Eyebrow}" FontSize="20" Foreground="#0A1B3D"/>
+                            </Border>
                             <CheckBox Style="{StaticResource SelectToggle}" IsChecked="{Binding IsSelected}"
                                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,14,0"/>
                         </Grid>

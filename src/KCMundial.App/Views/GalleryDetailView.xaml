@@ -39,29 +39,33 @@
                 </Border>
                 <StackPanel Grid.Column="1" Margin="28,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="Escaneá y llevate tu foto" Style="{StaticResource TitleLarge}"/>
-                    <ContentControl Content="{Binding Small}" ContentTemplate="{StaticResource PrintStatusTemplate}" Focusable="False" Margin="0,10,0,0"/>
-                    <ContentControl Content="{Binding Xl}" ContentTemplate="{StaticResource PrintStatusTemplate}" Focusable="False"/>
+                    <ContentControl Content="{Binding Print}" ContentTemplate="{StaticResource PrintStatusTemplate}" Focusable="False" Margin="0,10,0,0"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <UniformGrid Grid.Row="3" Columns="3" Margin="64,24,64,56">
+        <UniformGrid Grid.Row="3" Columns="2" Margin="64,24,64,56">
             <Button Style="{StaticResource DangerButton}" Command="{Binding DeleteCommand}" Margin="0,0,8,0">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource IconTrash}" Style="{StaticResource Icon}" Margin="0,0,10,0"/>
                     <TextBlock Text="BORRAR" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button Style="{StaticResource SecondaryButton}" Command="{Binding Small.PrintCommand}" Margin="8,0">
+            <Button Style="{StaticResource SecondaryButton}" Command="{Binding Print.PrintCommand}" Margin="8,0,0,0">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,10,0"/>
-                    <TextBlock Text="IMPRIMIR" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource AccentButton}" Command="{Binding Xl.PrintCommand}" Margin="8,0,0,0">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{DynamicResource XlIcon}" Style="{StaticResource Icon}" Margin="0,0,10,0"/>
-                    <TextBlock Text="IMPRIMIR XL" VerticalAlignment="Center"/>
+                    <TextBlock VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="IMPRIMIR FIGURITA"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsGrande}" Value="True">
+                                        <Setter Property="Text" Value="IMPRIMIR A4"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Button>
         </UniformGrid>

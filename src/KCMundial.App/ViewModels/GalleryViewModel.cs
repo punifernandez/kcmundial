@@ -63,7 +63,11 @@ public partial class GalleryViewModel : ObservableObject
             {
                 if (token.IsCancellationRequested) return;
                 var thumb = QrImageFactory.LoadImage(item.Path, 360);
-                _dispatcher.BeginInvoke(() => item.Thumbnail = thumb, DispatcherPriority.Background);
+                _dispatcher.BeginInvoke(() =>
+                {
+                    item.Thumbnail = thumb;
+                    item.IsGrande = thumb is { } t && t.PixelWidth > t.PixelHeight;
+                }, DispatcherPriority.Background);
             }
         }, token);
     }
@@ -109,7 +113,7 @@ public partial class GalleryViewModel : ObservableObject
     private void Back()
     {
         _loadCts?.Cancel();
-        _navigation.NavigateToMain();
+        _navigation.NavigateToStart();
     }
 
     [RelayCommand]
@@ -128,6 +132,10 @@ public partial class FiguritaItem : ObservableObject
 
     [ObservableProperty]
     private BitmapSource? _thumbnail;
+
+    /// <summary>Foto grande (apaisada): se marca en la galería.</summary>
+    [ObservableProperty]
+    private bool _isGrande;
 
     [ObservableProperty]
     private bool _isSelected;

@@ -3,6 +3,9 @@ using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KCMundial.App.Services;
+using KCMundial.Core.Interfaces;
+using KCMundial.Core.Models;
+using KCMundial.Storage;
 
 namespace KCMundial.App.ViewModels;
 
@@ -59,24 +62,23 @@ public partial class PrintJobViewModel : ObservableObject
     }
 }
 
-/// <summary>Lo común a la pantalla de resultado y al detalle de galería: imagen, QR e impresión chica y XL.</summary>
+/// <summary>Lo común a la pantalla de resultado y al detalle de galería: imagen, QR e impresión en su tamaño.</summary>
 public abstract partial class PrintableFiguritaViewModel : ObservableObject
 {
-    protected PrintableFiguritaViewModel(string figuritaId, FiguritaFiles files, PhotoPrinter smallPrinter, PhotoPrinter xlPrinter)
+    protected PrintableFiguritaViewModel(string figuritaId, FiguritaFiles files, PhotoPrinter printer)
     {
         FiguritaId = figuritaId;
+        Format = files.Format;
         FiguritaImage = QrImageFactory.LoadImage(files.DisplayPath);
-        Small = new PrintJobViewModel("Figurita", smallPrinter, files.SmallPrintPath);
-        Xl = new PrintJobViewModel("Foto XL", xlPrinter, files.XlPrintPath);
+        Print = new PrintJobViewModel(files.Format == PhotoFormat.Grande ? "Foto grande" : "Figurita", printer, files.PrintPath);
     }
 
     public string FiguritaId { get; }
+    public PhotoFormat Format { get; }
+    public bool IsGrande => Format == PhotoFormat.Grande;
 
-    /// <summary>Figurita chica en la DNP.</summary>
-    public PrintJobViewModel Small { get; }
-
-    /// <summary>Ampliación en la impresora XL (A4): el máster 5:7 entero, casi a hoja completa.</summary>
-    public PrintJobViewModel Xl { get; }
+    /// <summary>Impresión en el tamaño de la foto (DNP para la figurita, Epson A4 para la grande).</summary>
+    public PrintJobViewModel Print { get; }
 
     [ObservableProperty]
     private BitmapSource? _figuritaImage;
@@ -87,38 +89,40 @@ public abstract partial class PrintableFiguritaViewModel : ObservableObject
     public void SetQrUrl(string url) => QrImage = QrImageFactory.Create(url);
 }
 
-/// <summary>Rutas de los archivos de una foto: pantalla, hoja de la DNP y máster para la XL (con respaldo para fotos viejas).</summary>
-public sealed record FiguritaFiles(string DisplayPath, string SmallPrintPath, string XlPrintPath)
+/// <summary>Rutas y formato de una foto: la versión de pantalla y lo que se imprime.</summary>
+public sealed record FiguritaFiles(string DisplayPath, string PrintPath, PhotoFormat Format)
 {
-    public static FiguritaFiles For(Core.Interfaces.IPathResolver paths, string id)
+    /// <summary>Para la galería: el formato sale de la metadata (las fotos viejas son figuritas).</summary>
+    public static FiguritaFiles For(IPathResolver paths, MetadataWriter metadata, string id)
     {
         var display = Path.Combine(paths.FiguritasFolder, id + ".jpg");
+        var format = metadata.Read(id)?.Format ?? PhotoFormat.Figurita;
         string FirstExisting(params string[] candidates) => candidates.FirstOrDefault(File.Exists) ?? display;
-        return new FiguritaFiles(
-            display,
-            FirstExisting(Path.Combine(paths.ImpresionFolder, id + ".jpg"), display),
-            FirstExisting(Path.Combine(paths.FiguritasHdFolder, id + ".jpg"), display));
+        var print = format == PhotoFormat.Grande
+            ? FirstExisting(Path.Combine(paths.FiguritasHdFolder, id + ".jpg"), display)
+            : FirstExisting(Path.Combine(paths.ImpresionFolder, id + ".jpg"), display);
+        return new FiguritaFiles(display, print, format);
     }
 }
 
 /// <summary>
-/// Pantalla después de la foto: la figurita chica se imprime sola; el invitado puede imprimir otra, pedir la XL
-/// o sacar otra foto. No vuelve sola al inicio.
+/// Pantalla después de la foto: se imprime sola una vez en su tamaño; el invitado puede imprimir de nuevo o sacar
+/// otra foto. Queda esperando (para leer el QR o pedir otra copia): no vuelve sola al inicio.
 /// </summary>
 public partial class ResultViewModel : PrintableFiguritaViewModel
 {
     private readonly INavigationService _navigation;
 
     public ResultViewModel(string figuritaId, FiguritaFiles files, string? qrUrl, INavigationService navigation,
-        PhotoPrinter smallPrinter, PhotoPrinter xlPrinter, AppSettings settings)
-        : base(figuritaId, files, smallPrinter, xlPrinter)
+        PhotoPrinter printer, AppSettings settings)
+        : base(figuritaId, files, printer)
     {
         _navigation = navigation;
         if (qrUrl != null) SetQrUrl(qrUrl);
         if (settings.AutoPrint)
-            _ = Small.PrintAsync();
+            _ = Print.PrintAsync();
     }
 
     [RelayCommand]
-    private void Back() => _navigation.NavigateToMain();
+    private void Back() => _navigation.NavigateToStart();
 }

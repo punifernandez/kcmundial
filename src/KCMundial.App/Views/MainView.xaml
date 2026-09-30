@@ -24,6 +24,9 @@
                             </Border>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsLandscape}" Value="True">
+                                <Setter TargetName="ring" Property="Width" Value="297"/>
+                            </DataTrigger>
                             <Trigger Property="Tag">
                                 <Trigger.Value>
                                     <sys:Boolean>True</sys:Boolean>
@@ -71,28 +74,25 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Encabezado -->
+        <!-- Encabezado: volver a elegir tamaño, título según el formato, operador -->
         <Border Grid.Row="0" Style="{StaticResource HeaderPanel}" Margin="48,40,48,0">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center">
+                <Button Style="{StaticResource SquareIconButton}" Command="{Binding GoBackCommand}" VerticalAlignment="Center" Margin="0,0,24,0"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">
+                    <Path Data="{StaticResource IconBack}" Style="{StaticResource Icon}"/>
+                </Button>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="{DynamicResource Text.Eyebrow}" Style="{StaticResource Eyebrow}" FontSize="24"/>
-                    <TextBlock Text="{DynamicResource Text.MainTitle}" Style="{StaticResource Display}" FontSize="58" Margin="0,-4,0,0"/>
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource Display}" FontSize="58" Margin="0,-4,0,0"/>
                 </StackPanel>
-                <TextBlock Grid.Column="1" Text="★★★" Foreground="{DynamicResource AccentBrush}" FontSize="34" VerticalAlignment="Center" Margin="0,0,20,0"
-                           Visibility="{DynamicResource StarsVisibility}"/>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource SquareIconButton}" Command="{Binding OpenGalleryCommand}" Margin="0,0,12,0">
-                        <Path Data="{StaticResource IconGallery}" Style="{StaticResource Icon}"/>
-                    </Button>
-                    <Button Style="{StaticResource SquareIconButton}" Command="{Binding ToggleAdminPanelCommand}">
-                        <Path Data="{StaticResource IconCog}" Style="{StaticResource Icon}"/>
-                    </Button>
-                </StackPanel>
+                <Button Grid.Column="2" Style="{StaticResource SquareIconButton}" Command="{Binding ToggleAdminPanelCommand}" VerticalAlignment="Center">
+                    <Path Data="{StaticResource IconCog}" Style="{StaticResource Icon}"/>
+                </Button>
             </Grid>
         </Border>
 
@@ -186,29 +186,30 @@
             </StackPanel>
         </Border>
 
-        <!-- Elegí tu marco / camiseta -->
-        <StackPanel Grid.Row="2" Margin="0,8,0,0" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">
+        <!-- Elegí tu marco (solo si hay más de uno para este formato) -->
+        <StackPanel Grid.Row="2" Margin="0,8,0,0" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                    Visibility="{Binding HasFrameChoice, Converter={StaticResource BoolToVisibility}}">
             <TextBlock Text="{DynamicResource Text.FrameLabel}" Style="{StaticResource Eyebrow}" FontSize="26" HorizontalAlignment="Center" Margin="0,0,0,18"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="1" Tag="{Binding IsFrame1Selected}">
-                    <Grid>
-                        <Image Source="{Binding FrameThumbnail1}" Stretch="UniformToFill"/>
-                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="1" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/></Border>
-                    </Grid>
-                </Button>
-                <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="2" Tag="{Binding IsFrame2Selected}">
-                    <Grid>
-                        <Image Source="{Binding FrameThumbnail2}" Stretch="UniformToFill"/>
-                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="2" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/></Border>
-                    </Grid>
-                </Button>
-                <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="3" Tag="{Binding IsFrame3Selected}">
-                    <Grid>
-                        <Image Source="{Binding FrameThumbnail3}" Stretch="UniformToFill"/>
-                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="3" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/></Border>
-                    </Grid>
-                </Button>
-            </StackPanel>
+            <ItemsControl ItemsSource="{Binding Frames}" HorizontalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Style="{StaticResource FrameChoice}" Tag="{Binding IsSelected}" CommandParameter="{Binding}"
+                                Command="{Binding DataContext.SelectFrameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                            <Grid>
+                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                                <Border Style="{StaticResource FrameNumber}">
+                                    <TextBlock Text="{Binding Index}" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </StackPanel>
 
         <!-- Disparador: bloque de ancho completo -->
@@ -222,49 +223,5 @@
             </Button>
         </Grid>
 
-        <!-- Panel del operador -->
-        <Grid Grid.RowSpan="4" Visibility="{Binding IsAdminPanelOpen, Converter={StaticResource BoolToVisibility}}">
-            <Rectangle Fill="#99000000">
-                <Rectangle.InputBindings>
-                    <MouseBinding MouseAction="LeftClick" Command="{Binding ToggleAdminPanelCommand}"/>
-                </Rectangle.InputBindings>
-            </Rectangle>
-            <Border Style="{StaticResource Card}" Background="{DynamicResource SurfaceSolidBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,130,48,0" Width="460" Padding="28">
-                <StackPanel>
-                    <TextBlock Text="OPERADOR" Style="{StaticResource Eyebrow}"/>
-
-                    <TextBlock Text="Cámara" Style="{StaticResource Caption}" Margin="0,18,0,8"/>
-                    <ComboBox x:Name="CameraComboBox" ItemsSource="{Binding Cameras}" SelectedItem="{Binding SelectedCamera, Mode=OneWay}"
-                              DisplayMemberPath="DisplayName" Style="{StaticResource ModernComboBox}" DropDownClosed="CameraComboBox_DropDownClosed"/>
-                    <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0">
-                        <Run Text="Activa:"/> <Run Text="{Binding ActiveCameraDisplayName, Mode=OneWay}"/>
-                    </TextBlock>
-
-                    <TextBlock Text="Impresoras" Style="{StaticResource Caption}" Margin="0,22,0,8"/>
-                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureSmallPrinterCommand}" MinHeight="56" FontSize="22">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
-                            <TextBlock Text="Configurar impresora figurita" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureXlPrinterCommand}" Margin="0,10,0,0" MinHeight="56" FontSize="22">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
-                            <TextBlock Text="Configurar impresora XL" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <TextBlock Text="{Binding AdminMessage}" Style="{StaticResource Caption}" Margin="0,8,0,0"
-                               Visibility="{Binding AdminMessage, Converter={StaticResource NullToVisibility}}"/>
-
-                    <Button Style="{StaticResource DangerButton}" Command="{Binding CloseAppCommand}" Margin="0,22,0,0" MinHeight="56" FontSize="22">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconClose}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
-                            <TextBlock Text="Cerrar la app" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Border>
-        </Grid>
     </Grid>
 </UserControl>

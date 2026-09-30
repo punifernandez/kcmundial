@@ -34,6 +34,9 @@
                     </StackPanel>
                 </Border>
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:StartViewModel}">
+                <views:StartView/>
+            </DataTemplate>
             <DataTemplate DataType="{x:Type vm:MainViewModel}">
                 <views:MainView/>
             </DataTemplate>

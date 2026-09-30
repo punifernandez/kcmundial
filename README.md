@@ -1,8 +1,14 @@
 # KCMundial – Photobooth
 
-Photobooth para eventos: el invitado elige un marco, se saca la foto, se imprime sola como **figurita 5×7 cm en la
-DNP DP-QW410** (hoja 4×6 cortada al medio por la impresora) y se lleva la foto digital escaneando un QR. En el segundo monitor corre un video en loop y, después de cada foto,
-se muestra la figurita con el QR.
+Photobooth para eventos. Flujo del invitado:
+
+1. **Elegí tu foto:** figurita (5×7, vertical) o foto grande (A4 apaisada).
+2. **Preview** con los marcos de ese tamaño (si hay uno solo, no se muestra el selector) y botón para volver.
+3. **Foto:** cuenta regresiva, se arma la imagen y **se imprime sola una vez**: la figurita en la **DNP DP-QW410**
+   (hoja 4×6 cortada al medio), la foto grande en la **Epson L8050** (A4 apaisada).
+4. **Resultado:** la foto, el QR para llevársela y "Imprimir de nuevo" / "Tomar nueva foto". Queda esperando.
+
+En el segundo monitor corre un video en loop y, después de cada foto, se muestra con el QR.
 
 ## Requisitos
 
@@ -75,6 +81,10 @@ Se crea junto al `.exe` la primera vez que se abre la app. Cambiá los valores y
 | `UploadEnabled` | `true` | Subir la foto al servidor para el QR. Si no hay internet, el QR apunta a la red local. |
 
 ## Marcos
+
+- **Figurita:** `assets/Fondo_1.png`, `Fondo_2.png`, `Fondo_3.png` (5:7 vertical).
+- **Foto grande:** `assets/Grande_1.png` (A4 apaisado, 1,414:1). Se pueden agregar `Grande_2.png`, `Grande_3.png`… y
+  aparecen solos para elegir. Recomendado 3508×2480 (A4 a 300 dpi).
 
 `assets/Fondo_1.png`, `Fondo_2.png`, `Fondo_3.png`: PNG con la ventana de la foto **transparente**, en proporción
 **5:7** (la figurita). Recomendado **2500×3500**. Plantilla e instrucciones para Canva:

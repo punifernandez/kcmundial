@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KCMundial.App.Services;
 using KCMundial.Core.Interfaces;
+using KCMundial.Core.Models;
 using KCMundial.Processing;
 using KCMundial.Storage;
 
@@ -31,6 +32,10 @@ public partial class ShellViewModel : ObservableObject, INavigationService
     /// <summary>Resultado de subidas que terminaron (id → url, null si falló).</summary>
     private readonly ConcurrentDictionary<string, string?> _uploads = new();
     private bool _isClosing;
+    private readonly StartViewModel _start;
+
+    /// <summary>Para el panel del operador, que está sobre todas las pantallas.</summary>
+    public MainViewModel Main => _mainViewModel;
 
     public ShellViewModel(
         MainViewModel mainViewModel,
@@ -53,7 +58,8 @@ public partial class ShellViewModel : ObservableObject, INavigationService
         _secondaryDisplay = secondaryDisplay;
         _mainViewModel.SetNavigation(this);
         exportService.UploadFinished += OnUploadFinished;
-        CurrentViewModel = _mainViewModel;
+        _start = new StartViewModel(this, _mainViewModel, _pathResolver);
+        CurrentViewModel = _start;
     }
 
     private string LocalUrl(string id) => $"{_serverHost.BaseUrl}/f/{id}";
@@ -79,18 +85,28 @@ public partial class ShellViewModel : ObservableObject, INavigationService
         });
     }
 
-    public void NavigateToMain()
+    public void NavigateToStart()
     {
-        CurrentViewModel = _mainViewModel;
         _mainViewModel.OnReturnFromResult();
+        CurrentViewModel = _start;
         _secondaryDisplay?.ShowIdle();
     }
+
+    public void NavigateToCapture(PhotoFormat format)
+    {
+        _mainViewModel.PrepareFor(format);
+        _mainViewModel.OnReturnFromResult();
+        CurrentViewModel = _mainViewModel;
+        _secondaryDisplay?.ShowIdle();
+    }
+
+    private PhotoPrinter PrinterFor(PhotoFormat format) => format == PhotoFormat.Grande ? _xlPrinter : _smallPrinter;
 
     public void NavigateToResult(ExportResult result)
     {
         var qrUrl = QrUrlFor(result.Id);
-        var files = new FiguritaFiles(result.FiguritaPath, result.PrintPath, result.MasterPath);
-        CurrentViewModel = new ResultViewModel(result.Id, files, qrUrl, this, _smallPrinter, _xlPrinter, _settings);
+        var files = new FiguritaFiles(result.FiguritaPath, result.PrintPath, result.Format);
+        CurrentViewModel = new ResultViewModel(result.Id, files, qrUrl, this, PrinterFor(result.Format), _settings);
         _secondaryDisplay?.ShowResult(result.Id, qrUrl);
     }
 
@@ -102,8 +118,9 @@ public partial class ShellViewModel : ObservableObject, INavigationService
 
     public void NavigateToGalleryDetail(string figuritaId)
     {
-        CurrentViewModel = new GalleryDetailViewModel(figuritaId, FiguritaFiles.For(_pathResolver, figuritaId),
-            QrUrlFor(figuritaId) ?? LocalUrl(figuritaId), this, _pathResolver, _smallPrinter, _xlPrinter);
+        var files = FiguritaFiles.For(_pathResolver, _metadataWriter, figuritaId);
+        CurrentViewModel = new GalleryDetailViewModel(figuritaId, files, QrUrlFor(figuritaId) ?? LocalUrl(figuritaId), this,
+            _pathResolver, PrinterFor(files.Format));
         _secondaryDisplay?.ShowGalleryPhoto(figuritaId);
     }
 

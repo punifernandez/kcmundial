@@ -87,12 +87,22 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isAdminPanelOpen;
 
-    /// <summary>Marco seleccionado (1, 2 o 3).</summary>
+    /// <summary>Marco seleccionado (desde 1).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFrame1Selected))]
-    [NotifyPropertyChangedFor(nameof(IsFrame2Selected))]
-    [NotifyPropertyChangedFor(nameof(IsFrame3Selected))]
     private int _selectedFrameIndex = 1;
+
+    /// <summary>Figurita (vertical) o foto grande (apaisada). Lo elige el invitado en la pantalla de inicio.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    private PhotoFormat _format = PhotoFormat.Figurita;
+
+    public string Title => Format == PhotoFormat.Grande ? "Hacé tu foto grande" : "Hacé tu figurita";
+
+    /// <summary>Marcos disponibles para el formato elegido.</summary>
+    public ObservableCollection<FrameOption> Frames { get; } = new();
+
+    [ObservableProperty]
+    private bool _hasFrameChoice;
 
     [ObservableProperty]
     private ImageSource? _previewFrameOverlay;
@@ -103,14 +113,6 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private double _previewBoxHeight = 1500;
-
-    public ImageSource? FrameThumbnail1 { get; }
-    public ImageSource? FrameThumbnail2 { get; }
-    public ImageSource? FrameThumbnail3 { get; }
-
-    public bool IsFrame1Selected => SelectedFrameIndex == 1;
-    public bool IsFrame2Selected => SelectedFrameIndex == 2;
-    public bool IsFrame3Selected => SelectedFrameIndex == 3;
 
     public double PreviewRotation => FiguritaComposer.NormalizeRotation(_settings.CameraRotation);
     public double PreviewMirrorScale => _settings.MirrorPreview ? -1 : 1;
@@ -141,10 +143,7 @@ public partial class MainViewModel : ObservableObject
         _logger = logger;
         _cameraManager.CameraError += OnCameraError;
 
-        FrameThumbnail1 = QrImageFactory.LoadImage(_pathResolver.GetFramePath(1), 240);
-        FrameThumbnail2 = QrImageFactory.LoadImage(_pathResolver.GetFramePath(2), 240);
-        FrameThumbnail3 = QrImageFactory.LoadImage(_pathResolver.GetFramePath(3), 240);
-        LoadFrameOverlay();
+        PrepareFor(PhotoFormat.Figurita);
         PreloadSounds();
     }
 
@@ -152,11 +151,26 @@ public partial class MainViewModel : ObservableObject
 
     // ---------------------------------------------------------------- Marcos
 
+    /// <summary>Prepara el preview para el formato elegido: carga sus marcos y elige el primero.</summary>
+    public void PrepareFor(PhotoFormat format)
+    {
+        Format = format;
+        Frames.Clear();
+        var count = _pathResolver.GetFrameCount(format);
+        for (var i = 1; i <= count; i++)
+            Frames.Add(new FrameOption(i, QrImageFactory.LoadImage(_pathResolver.GetFramePath(format, i), 320),
+                format == PhotoFormat.Grande));
+        HasFrameChoice = Frames.Count > 1;
+        GuidanceMessage = "";
+        SelectFrameCore(1);
+        _logger?.Info($"MainViewModel: format {format}, {count} frame(s)");
+    }
+
     partial void OnSelectedFrameIndexChanged(int value) => LoadFrameOverlay();
 
     private void LoadFrameOverlay()
     {
-        var overlay = QrImageFactory.LoadImage(_pathResolver.GetFramePath(SelectedFrameIndex), 1200);
+        var overlay = QrImageFactory.LoadImage(_pathResolver.GetFramePath(Format, SelectedFrameIndex), 1200);
         PreviewFrameOverlay = overlay;
         var aspect = overlay is BitmapSource b && b.PixelHeight > 0 ? (double)b.PixelWidth / b.PixelHeight : FiguritaComposer.DefaultAspect;
         PreviewBoxWidth = 1000 * aspect;
@@ -173,9 +187,27 @@ public partial class MainViewModel : ObservableObject
         {
             int i => i,
             string s when int.TryParse(s, out var parsed) => parsed,
+            FrameOption f => f.Index,
             _ => SelectedFrameIndex
         };
-        SelectedFrameIndex = Math.Clamp(n, 1, 3);
+        SelectFrameCore(n);
+    }
+
+    private void SelectFrameCore(int index)
+    {
+        var n = Math.Clamp(index, 1, Math.Max(1, Frames.Count));
+        foreach (var f in Frames) f.IsSelected = f.Index == n;
+        if (SelectedFrameIndex == n) LoadFrameOverlay();
+        else SelectedFrameIndex = n;
+    }
+
+    /// <summary>Volver a elegir tamaño.</summary>
+    [RelayCommand]
+    private void GoBack()
+    {
+        if (IsBusy) return;
+        IsAdminPanelOpen = false;
+        _navigation?.NavigateToStart();
     }
 
     // ---------------------------------------------------------------- Cámara
@@ -343,7 +375,8 @@ public partial class MainViewModel : ObservableObject
     private void MaybeStartFaceDetection(byte[] bgra, int width, int height)
     {
         var now = Environment.TickCount64;
-        if (IsBusy || now - Interlocked.Read(ref _lastDetectionTick) < DetectionIntervalMs) return;
+        // En la foto grande suele haber varias personas: sin indicaciones de "acercate/alejate".
+        if (IsBusy || Format == PhotoFormat.Grande || now - Interlocked.Read(ref _lastDetectionTick) < DetectionIntervalMs) return;
         if (Interlocked.CompareExchange(ref _detectionRunning, 1, 0) != 0) return;
 
         FrameSampler.SampleVisibleBgr(bgra, width, height, _settings.CameraRotation, FrameAspect, DetectionWidth,
@@ -412,7 +445,7 @@ public partial class MainViewModel : ObservableObject
             }
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var result = await _exportService.ExportAsync(capture, SelectedFrameIndex, _settings.CameraRotation, cts.Token);
+            var result = await _exportService.ExportAsync(capture, Format, SelectedFrameIndex, _settings.CameraRotation, cts.Token);
             if (result == null)
             {
                 CameraError = "No se pudo armar la foto. Probá de nuevo.";
@@ -511,4 +544,22 @@ public partial class MainViewModel : ObservableObject
         IsAdminPanelOpen = false;
         _navigation?.Close();
     }
+}
+
+/// <summary>Un marco para elegir en el preview.</summary>
+public partial class FrameOption : ObservableObject
+{
+    public FrameOption(int index, ImageSource? thumbnail, bool isLandscape)
+    {
+        Index = index;
+        Thumbnail = thumbnail;
+        IsLandscape = isLandscape;
+    }
+
+    public int Index { get; }
+    public ImageSource? Thumbnail { get; }
+    public bool IsLandscape { get; }
+
+    [ObservableProperty]
+    private bool _isSelected;
 }

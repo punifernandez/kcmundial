@@ -18,8 +18,11 @@ public interface IPathResolver
     string Ampliaciones20x30Folder { get; }
     string AssetsFolder { get; }
 
-    /// <summary>Ruta al marco seleccionable (1, 2 o 3). Ej: Fondo_1.png, Fondo_2.png, Fondo_3.png.</summary>
-    string GetFramePath(int frameIndex);
+    /// <summary>Ruta al marco N (desde 1) del formato: Fondo_N.png (figurita) o Grande_N.png (foto grande).</summary>
+    string GetFramePath(Models.PhotoFormat format, int frameIndex);
+
+    /// <summary>Cuántos marcos hay para el formato (archivos consecutivos desde el 1).</summary>
+    int GetFrameCount(Models.PhotoFormat format);
 
     /// <summary>
     /// Ensure all required folders exist.

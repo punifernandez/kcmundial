@@ -7,6 +7,8 @@ public sealed class FiguritaMetadata
 {
     public string Id { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    /// <summary>Figurita o foto grande (fotos viejas: Figurita).</summary>
+    public PhotoFormat Format { get; set; } = PhotoFormat.Figurita;
     public string? CameraName { get; set; }
     public FaceBox? FaceBox { get; set; }
     /// <summary>URL pública devuelta por el servidor de hosting (para el QR permanente).</summary>
