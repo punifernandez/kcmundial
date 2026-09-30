@@ -7,7 +7,7 @@
     <UserControl.Resources>
         <!-- Tarjeta grande para elegir el tamaño -->
         <Style x:Key="ChoiceCard" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-            <Setter Property="Padding" Value="36"/>
+            <Setter Property="Padding" Value="28,28,28,24"/>
             <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
             <Setter Property="BorderThickness" Value="3"/>
@@ -60,32 +60,51 @@
         </Border>
 
         <!-- Figurita -->
-        <Button Grid.Row="1" Style="{StaticResource ChoiceCard}" Command="{Binding ChooseFiguritaCommand}" Margin="64,40,64,20">
+        <Button Grid.Row="1" Style="{StaticResource ChoiceCard}" Command="{Binding ChooseFiguritaCommand}" Margin="64,36,64,18">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Border Background="{DynamicResource PhotoMatBrush}" Padding="6" CornerRadius="4" VerticalAlignment="Center">
-                    <Image Source="{Binding FiguritaSample}" Height="440" Stretch="Uniform"/>
-                </Border>
-                <StackPanel Grid.Column="1" Margin="40,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="FIGURITA" Style="{StaticResource Display}" FontSize="80"/>
-                    <TextBlock Text="Tamaño figurita, se imprime al instante" Style="{StaticResource Caption}" FontSize="28" Margin="0,8,0,0"/>
-                </StackPanel>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <!-- Muestra del marco: el hueco transparente queda sobre azul con una cámara, como el preview -->
+                <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="Both">
+                    <Border Background="{DynamicResource PhotoMatBrush}" Padding="8" CornerRadius="4">
+                        <Grid>
+                            <Rectangle Fill="#1B3566"/>
+                            <Path Data="{StaticResource IconCamera}" Fill="#4F6FA3" Width="120" Height="120" Stretch="Uniform"/>
+                            <Image Source="{Binding FiguritaSample}" Width="500" Height="700" Stretch="Uniform"/>
+                        </Grid>
+                    </Border>
+                </Viewbox>
+                <TextBlock Grid.Row="1" Text="FIGURITA" Style="{StaticResource Display}" FontSize="60" HorizontalAlignment="Center" Margin="0,20,0,0"/>
+                <TextBlock Grid.Row="2" Text="Tamaño figurita · se imprime al instante" Style="{StaticResource Caption}" FontSize="24" HorizontalAlignment="Center" TextAlignment="Center"/>
             </Grid>
         </Button>
 
         <!-- Foto grande -->
-        <Button Grid.Row="2" Style="{StaticResource ChoiceCard}" Command="{Binding ChooseGrandeCommand}" Margin="64,20,64,64"
+        <Button Grid.Row="2" Style="{StaticResource ChoiceCard}" Command="{Binding ChooseGrandeCommand}" Margin="64,18,64,56"
                 Visibility="{Binding HasGrande, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel VerticalAlignment="Center">
-                <Border Background="{DynamicResource PhotoMatBrush}" Padding="6" CornerRadius="4" HorizontalAlignment="Center">
-                    <Image Source="{Binding GrandeSample}" Height="400" Stretch="Uniform"/>
-                </Border>
-                <TextBlock Text="FOTO GRANDE" Style="{StaticResource Display}" FontSize="80" HorizontalAlignment="Center" Margin="0,24,0,0"/>
-                <TextBlock Text="Hoja A4 apaisada, ideal para grupos" Style="{StaticResource Caption}" FontSize="28" HorizontalAlignment="Center"/>
-            </StackPanel>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <!-- Muestra del marco: el hueco transparente queda sobre azul con una cámara, como el preview -->
+                <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="Both">
+                    <Border Background="{DynamicResource PhotoMatBrush}" Padding="8" CornerRadius="4">
+                        <Grid>
+                            <Rectangle Fill="#1B3566"/>
+                            <Path Data="{StaticResource IconCamera}" Fill="#4F6FA3" Width="120" Height="120" Stretch="Uniform"/>
+                            <Image Source="{Binding GrandeSample}" Width="990" Height="700" Stretch="Uniform"/>
+                        </Grid>
+                    </Border>
+                </Viewbox>
+                <TextBlock Grid.Row="1" Text="FOTO GRANDE" Style="{StaticResource Display}" FontSize="60" HorizontalAlignment="Center" Margin="0,20,0,0"/>
+                <TextBlock Grid.Row="2" Text="Hoja A4 apaisada · ideal para grupos" Style="{StaticResource Caption}" FontSize="24" HorizontalAlignment="Center" TextAlignment="Center"/>
+            </Grid>
         </Button>
+
     </Grid>
 </UserControl>
