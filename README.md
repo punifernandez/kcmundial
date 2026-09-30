@@ -63,7 +63,8 @@ Se crea junto al `.exe` la primera vez que se abre la app. Cambiá los valores y
 | `AutoPrint` | `true` | Imprimir apenas se saca la foto. |
 | `PrinterName` | `""` | Nombre (o parte) de la impresora. Vacío = la primera que contenga "QW410". |
 | `PrintCopies` | `1` | Copias por foto. |
-| `PrintPageWidthInches` / `PrintPageHeightInches` | `3` / `4` | Tamaño de hoja en la DNP. Se elige el tamaño del driver más parecido (el log lista los disponibles: "driver paper sizes"). |
+| `PrintPaperName` | `""` | Nombre (o parte) del papel del driver, tal como aparece en el log ("driver paper sizes"). Tiene prioridad sobre el tamaño. |
+| `PrintPageWidthInches` / `PrintPageHeightInches` | `3` / `4` | Si no hay `PrintPaperName`: se elige el papel del driver más parecido a este tamaño. |
 | `PrintMarginMm` | `2` | Margen blanco alrededor de la figurita en la hoja. |
 | `UploadEnabled` | `true` | Subir la foto al servidor para el QR. Si no hay internet, el QR apunta a la red local. |
 

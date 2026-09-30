@@ -26,6 +26,9 @@ public sealed class AppSettings
     /// <summary>Nombre (o parte del nombre) de la impresora. Vacío = la primera que contenga "QW410".</summary>
     public string PrinterName { get; set; } = "";
     public int PrintCopies { get; set; } = 1;
+    /// <summary>Nombre (o parte) del papel del driver a usar, tal como aparece en el log ("driver paper sizes").
+    /// Vacío = el más parecido a PrintPageWidthInches × PrintPageHeightInches.</summary>
+    public string PrintPaperName { get; set; } = "";
     /// <summary>Tamaño de la hoja en la DNP (pulgadas). 3×4 = hoja 4×6 cortada al medio por la impresora.</summary>
     public double PrintPageWidthInches { get; set; } = 3.0;
     public double PrintPageHeightInches { get; set; } = 4.0;
