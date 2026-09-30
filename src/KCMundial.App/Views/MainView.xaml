@@ -236,34 +236,6 @@
                         <Run Text="Activa:"/> <Run Text="{Binding ActiveCameraDisplayName, Mode=OneWay}"/>
                     </TextBlock>
 
-                    <TextBlock Text="Tema" Style="{StaticResource Caption}" Margin="0,22,0,8"/>
-                    <UniformGrid Columns="2">
-                        <Button Command="{Binding SetThemeCommand}" CommandParameter="mundialista" Margin="0,0,6,0" MinHeight="56" FontSize="22">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsThemeMundialista}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            Mundialista
-                        </Button>
-                        <Button Command="{Binding SetThemeCommand}" CommandParameter="plano" Margin="6,0,0,0" MinHeight="56" FontSize="22">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsThemePlano}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource GoldBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            Plano
-                        </Button>
-                    </UniformGrid>
-
                     <TextBlock Text="Impresoras" Style="{StaticResource Caption}" Margin="0,22,0,8"/>
                     <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureSmallPrinterCommand}" MinHeight="56" FontSize="22">
                         <StackPanel Orientation="Horizontal">

@@ -1,7 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
-    <!-- Tema plano oscuro: azul noche sólido, líneas finas, un solo acento dorado. -->
+    <!-- Tema de la app: azul noche sólido, líneas finas, un solo acento dorado. Lo usan los estilos de AppTheme.xaml. -->
 
     <SolidColorBrush x:Key="AppBackgroundBrush" Color="#0A1B3D"/>
 

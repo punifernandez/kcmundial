@@ -10,7 +10,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/AppTheme.xaml"/>
-                <ResourceDictionary Source="Themes/Mundialista.xaml"/>
+                <ResourceDictionary Source="Themes/Plano.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
             <conv:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True"/>

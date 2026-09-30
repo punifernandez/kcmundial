@@ -38,14 +38,8 @@ Detalles de uso, configuración y archivos generados: `README.md`.
   proporción del marco (5:7).
 - La foto final nunca sale espejada (solo el preview).
 - La Sprocket/ADB ya no se usa.
-- Temas: `Themes/AppTheme.xaml` (estilos comunes, colores por DynamicResource) + `Themes/Mundialista.xaml` (por
-  defecto) y `Themes/Plano.xaml` con las mismas claves (colores, textos `Text.*`, íconos, fondo). `ThemeManager`
-  los cambia en vivo. Toda clave nueva tiene que existir en los dos temas.
-- Configuración de drivers: el operador la elige desde el panel (ventana del fabricante) y se guarda como DEVMODE
-  (`impresora_*.devmode` junto al .exe); tiene prioridad sobre las preferencias de Windows. La ventana principal
-  es Topmost para que no se vean popups de drivers ni la barra de tareas.
-- Pantalla de resultado sin tiempo: la figurita chica se imprime sola en la DNP; botones "Imprimir otra" (DNP),
-  "Imprimir XL" (Epson L8050, A4: se imprime el máster 5:7 entero, ~20×28 cm) y "Tomar otra foto".
+- Diseño: `Themes/AppTheme.xaml` (estilos comunes) + `Themes/Plano.xaml` (colores, textos `Text.*`, íconos).
+  Estética plana: bloques rectangulares, sin degradés ni botones ovalados.
 
 ## Compilar
 - En Windows: `dotnet build KCMundial.sln` / `publicar.bat`.

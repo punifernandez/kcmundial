@@ -57,7 +57,6 @@ Se crea junto al `.exe` la primera vez que se abre la app. Cambiá los valores y
 
 | Opción | Por defecto | Qué hace |
 |---|---|---|
-| `Theme` | `"mundialista"` | Tema visual: `"mundialista"` (cancha, marcador, camiseta) o `"plano"` (azul noche). También se cambia desde el panel del operador. |
 | `CameraRotation` | `0` | Grados (horario) para enderezar la imagen. Brio apaisada: `0`. Montada vertical: `90` (o `270` si sale cabeza abajo). |
 | `MirrorPreview` | `true` | Preview en espejo (la foto final nunca sale espejada). |
 | `HighResCapture` | `true` | Foto en la resolución máxima de la cámara: pasa a 4K al empezar la cuenta regresiva (para que enfoque) y se queda con el cuadro más nítido. Si falla, usa el cuadro del preview. |
@@ -88,7 +87,7 @@ Corre en loop, sin sonido, y se pausa mientras se muestra una foto.
 
 ## Operador
 
-- Botón de engranaje (arriba a la derecha): elegir cámara, tema (mundialista / plano), configurar impresoras, galería, cerrar la app.
+- Botón de engranaje (arriba a la derecha): elegir cámara, configurar impresoras, galería, cerrar la app.
 - **Configurar impresora figurita / XL:** abre la ventana del fabricante. Lo que se elija ahí (papel, tipo de
   papel, calidad, sin márgenes) queda guardado en la app (`impresora_figurita.devmode`, `impresora_xl.devmode`)
   y se usa en cada impresión, sin depender de las preferencias de Windows. Si hay configuración guardada, el

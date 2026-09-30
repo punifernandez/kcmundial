@@ -481,21 +481,6 @@ public partial class MainViewModel : ObservableObject
         AdminMessage = null;
     }
 
-    public bool IsThemeMundialista => _settings.Theme == ThemeManager.Mundialista;
-    public bool IsThemePlano => _settings.Theme == ThemeManager.Plano;
-
-    /// <summary>Cambia el tema en vivo y lo guarda en la configuración.</summary>
-    [RelayCommand]
-    private void SetTheme(string? theme)
-    {
-        _settings.Theme = ThemeManager.Normalize(theme);
-        ThemeManager.Apply(_settings.Theme);
-        _settings.Save(_logger);
-        OnPropertyChanged(nameof(IsThemeMundialista));
-        OnPropertyChanged(nameof(IsThemePlano));
-        _logger?.Info($"Theme: {_settings.Theme}");
-    }
-
     /// <summary>Resultado de la última acción del panel del operador.</summary>
     [ObservableProperty]
     private string? _adminMessage;

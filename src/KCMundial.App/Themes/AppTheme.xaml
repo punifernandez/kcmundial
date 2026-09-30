@@ -1,10 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!--
-        Estilos comunes a todos los temas. Los colores y textos vienen del tema activo
-        (Themes/Mundialista.xaml o Themes/Plano.xaml) y se leen con DynamicResource,
-        así el tema se puede cambiar en vivo desde el panel del operador.
-    -->
+    <!-- Estilos comunes. Los colores, textos e íconos vienen de Themes/Plano.xaml. -->
 
     <!-- ============================================================ Tipografía -->
     <FontFamily x:Key="DisplayFont">Bahnschrift SemiBold Condensed, Bahnschrift, Segoe UI Black</FontFamily>
@@ -154,7 +150,7 @@
         <Setter Property="Padding" Value="24"/>
     </Style>
 
-    <!-- Encabezado: "marcador" en el tema mundialista, línea simple en el plano -->
+    <!-- Encabezado: título con una línea abajo -->
     <Style x:Key="HeaderPanel" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource HeaderPanelBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource HeaderBorderBrush}"/>
