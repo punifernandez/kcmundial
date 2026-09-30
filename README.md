@@ -7,7 +7,7 @@ se muestra la figurita con el QR.
 ## Requisitos
 
 - Windows 10/11, .NET 8
-- Cámara **Logitech Brio 4K**, montada **vertical** (girada 90°)
+- Cámara **Logitech Brio 4K** (apaisada; también funciona montada vertical, ver `CameraRotation`)
 - Impresora **DNP DP-QW410** con su driver instalado y papel 4×6" (imprime en 3×4" con corte automático)
 - Pantalla táctil vertical (principal) + monitor/TV (secundario, opcional)
 
@@ -41,7 +41,7 @@ Todo queda en carpetas junto al `.exe`, con el mismo nombre de archivo (fecha_ho
 
 | Carpeta | Tamaño | Para qué |
 |---|---|---|
-| `raw/` | resolución completa de la cámara (Brio vertical: 2160×4096) | original, sin marco |
+| `raw/` | resolución completa de la cámara (Brio: 4096×2160; vertical: 2160×4096) | original, sin marco |
 | `figuritas_hd/` | lado largo 3600 px (con marcos 5:7: 2571×3600) | máster con marco |
 | `figuritas/` | 1182×1654 (5×7 cm a 600 dpi) | se muestra en pantalla y se comparte por QR |
 | `impresion/` | 900×1200 (3×4" a 300 dpi) | hoja para la DNP: la figurita entera, centrada, con margen blanco |
@@ -55,7 +55,7 @@ Se crea junto al `.exe` la primera vez que se abre la app. Cambiá los valores y
 
 | Opción | Por defecto | Qué hace |
 |---|---|---|
-| `CameraRotation` | `90` | Grados (horario) para enderezar la cámara vertical. Si la imagen sale cabeza abajo, poné `270`. |
+| `CameraRotation` | `0` | Grados (horario) para enderezar la imagen. Brio apaisada: `0`. Montada vertical: `90` (o `270` si sale cabeza abajo). |
 | `MirrorPreview` | `true` | Preview en espejo (la foto final nunca sale espejada). |
 | `HighResCapture` | `true` | Foto en la resolución máxima de la cámara: pasa a 4K al empezar la cuenta regresiva (para que enfoque) y se queda con el cuadro más nítido. Si falla, usa el cuadro del preview. |
 | `CountdownSeconds` | `3` | Cuenta regresiva. |

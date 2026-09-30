@@ -1,7 +1,7 @@
 # KCMundial 2 – contexto para Claude
 
 Photobooth para eventos (WPF, .NET 8, Windows). El invitado elige un marco, se saca la foto con una
-Logitech Brio montada vertical, se imprime sola como figurita 5×7 cm en una DNP DP-QW410 (hoja 4×6 cortada
+Logitech Brio (apaisada), se imprime sola como figurita 5×7 cm en una DNP DP-QW410 (hoja 4×6 cortada
 al medio: 3×4") y se lleva la foto
 digital por QR. El segundo monitor muestra un video en loop y, después de cada foto, la figurita + QR.
 Detalles de uso, configuración y archivos generados: `README.md`.
@@ -33,8 +33,9 @@ Detalles de uso, configuración y archivos generados: `README.md`.
 - La figurita es 5×7 cm (proporción 5:7): marcos de 2500×3500, plantilla en `plantillas/`.
   NO imprimir a hoja completa 4×6 (fue un error): se imprime la figurita entera en 3×4" con corte automático,
   como la app anterior. El 20×30 lleva la figurita entera con bandas.
-- Cámara vertical: `CameraRotation` (90 o 270) endereza la imagen; el preview se rota con un
-  `LayoutTransform` en la vista, la foto se rota en Skia.
+- Orientación de la cámara: `CameraRotation` (0 apaisada, 90/270 vertical) endereza la imagen; el preview se
+  rota con un `LayoutTransform` en la vista, la foto se rota en Skia. La foto se recorta al centro con la
+  proporción del marco (5:7).
 - La foto final nunca sale espejada (solo el preview).
 - La Sprocket/ADB ya no se usa.
 

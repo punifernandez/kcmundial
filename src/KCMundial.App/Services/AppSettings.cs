@@ -12,8 +12,9 @@ public sealed class AppSettings
 {
     public const string FileName = "kcmundial.settings.json";
 
-    /// <summary>Rotación horaria para enderezar la imagen de la cámara: 0, 90, 180 o 270. Con la Brio montada vertical: 90 o 270.</summary>
-    public int CameraRotation { get; set; } = 90;
+    /// <summary>Rotación horaria para enderezar la imagen de la cámara: 0, 90, 180 o 270.
+    /// Brio apaisada (normal): 0. Montada vertical: 90 o 270.</summary>
+    public int CameraRotation { get; set; } = 0;
     /// <summary>Preview en espejo (la foto final nunca sale espejada).</summary>
     public bool MirrorPreview { get; set; } = true;
     /// <summary>Sacar la foto en la resolución máxima de la cámara (si falla, usa el cuadro del preview).</summary>
