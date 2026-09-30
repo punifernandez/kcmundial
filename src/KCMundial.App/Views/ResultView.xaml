@@ -19,7 +19,7 @@
                     <TextBlock Text="{DynamicResource Text.ResultEyebrow}" Style="{StaticResource Eyebrow}" FontSize="26"/>
                     <TextBlock Text="{DynamicResource Text.ResultTitle}" Style="{StaticResource Display}" FontSize="58" Margin="0,-4,0,0"/>
                 </StackPanel>
-                <TextBlock Text="★★★" Foreground="{DynamicResource GoldBrush}" FontSize="34" HorizontalAlignment="Right" VerticalAlignment="Center"
+                <TextBlock Text="★★★" Foreground="{DynamicResource AccentBrush}" FontSize="34" HorizontalAlignment="Right" VerticalAlignment="Center"
                            Visibility="{DynamicResource StarsVisibility}"/>
             </Grid>
         </Border>

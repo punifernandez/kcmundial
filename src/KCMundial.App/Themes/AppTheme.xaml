@@ -169,7 +169,7 @@
     <Style x:Key="Spinner" TargetType="Control">
         <Setter Property="Width" Value="64"/>
         <Setter Property="Height" Value="64"/>
-        <Setter Property="Foreground" Value="{DynamicResource GoldBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="IsTabStop" Value="False"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -220,7 +220,7 @@
                             <Setter TargetName="bd" Property="Background" Value="{DynamicResource DividerBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Foreground" Value="{DynamicResource GoldBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

@@ -87,14 +87,13 @@ Corre en loop, sin sonido, y se pausa mientras se muestra una foto.
 
 ## Operador
 
-- Botón de engranaje (arriba a la derecha): elegir cámara, configurar impresoras, galería, cerrar la app.
+- Arriba a la derecha: ícono de **galería** (ver, reimprimir y borrar fotos) y **engranaje** del operador (cámara, configurar impresoras, cerrar la app).
 - **Configurar impresora figurita / XL:** abre la ventana del fabricante. Lo que se elija ahí (papel, tipo de
   papel, calidad, sin márgenes) queda guardado en la app (`impresora_figurita.devmode`, `impresora_xl.devmode`)
   y se usa en cada impresión, sin depender de las preferencias de Windows. Si hay configuración guardada, el
   papel es el elegido ahí (no se busca por tamaño). Para volver a lo de Windows, borrar el `.devmode`.
 - Epson L8050: elegir **Tipo de papel = el papel fotográfico que se usa (ej. Epson Premium Glossy)**,
   **Calidad = Alta**, **Tamaño = A4** (sin márgenes si se quiere) y desactivar **Alta velocidad**.
-- Galería: ver, reimprimir y borrar fotos.
 - Log: `kcmundial.log` junto al `.exe` (cámara, formatos elegidos, tiempos de captura, impresión).
 
 ## Estructura

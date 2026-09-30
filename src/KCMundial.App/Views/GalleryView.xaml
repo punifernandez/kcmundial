@@ -17,8 +17,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="box" Property="Background" Value="{DynamicResource GoldBrush}"/>
-                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource GoldBrush}"/>
+                                <Setter TargetName="box" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                 <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>

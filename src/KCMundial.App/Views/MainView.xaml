@@ -83,11 +83,16 @@
                     <TextBlock Text="{DynamicResource Text.Eyebrow}" Style="{StaticResource Eyebrow}" FontSize="24"/>
                     <TextBlock Text="{DynamicResource Text.MainTitle}" Style="{StaticResource Display}" FontSize="58" Margin="0,-4,0,0"/>
                 </StackPanel>
-                <TextBlock Grid.Column="1" Text="★★★" Foreground="{DynamicResource GoldBrush}" FontSize="34" VerticalAlignment="Center" Margin="0,0,20,0"
+                <TextBlock Grid.Column="1" Text="★★★" Foreground="{DynamicResource AccentBrush}" FontSize="34" VerticalAlignment="Center" Margin="0,0,20,0"
                            Visibility="{DynamicResource StarsVisibility}"/>
-                <Button Grid.Column="2" Style="{StaticResource SquareIconButton}" Command="{Binding ToggleAdminPanelCommand}" VerticalAlignment="Center" ToolTip="Operador">
-                    <Path Data="{StaticResource IconCog}" Style="{StaticResource Icon}"/>
-                </Button>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource SquareIconButton}" Command="{Binding OpenGalleryCommand}" Margin="0,0,12,0" ToolTip="Galería">
+                        <Path Data="{StaticResource IconGallery}" Style="{StaticResource Icon}"/>
+                    </Button>
+                    <Button Style="{StaticResource SquareIconButton}" Command="{Binding ToggleAdminPanelCommand}" ToolTip="Operador">
+                        <Path Data="{StaticResource IconCog}" Style="{StaticResource Icon}"/>
+                    </Button>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -188,19 +193,19 @@
                 <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="1" Tag="{Binding IsFrame1Selected}">
                     <Grid>
                         <Image Source="{Binding FrameThumbnail1}" Stretch="UniformToFill"/>
-                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="1" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource GoldBrush}" HorizontalAlignment="Center"/></Border>
+                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="1" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/></Border>
                     </Grid>
                 </Button>
                 <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="2" Tag="{Binding IsFrame2Selected}">
                     <Grid>
                         <Image Source="{Binding FrameThumbnail2}" Stretch="UniformToFill"/>
-                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="2" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource GoldBrush}" HorizontalAlignment="Center"/></Border>
+                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="2" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/></Border>
                     </Grid>
                 </Button>
                 <Button Style="{StaticResource FrameChoice}" Command="{Binding SelectFrameCommand}" CommandParameter="3" Tag="{Binding IsFrame3Selected}">
                     <Grid>
                         <Image Source="{Binding FrameThumbnail3}" Stretch="UniformToFill"/>
-                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="3" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource GoldBrush}" HorizontalAlignment="Center"/></Border>
+                        <Border Style="{StaticResource FrameNumber}"><TextBlock Text="3" Style="{StaticResource Display}" FontSize="40" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/></Border>
                     </Grid>
                 </Button>
             </StackPanel>
@@ -252,13 +257,7 @@
                     <TextBlock Text="{Binding AdminMessage}" Style="{StaticResource Caption}" Margin="0,8,0,0"
                                Visibility="{Binding AdminMessage, Converter={StaticResource NullToVisibility}}"/>
 
-                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding OpenGalleryCommand}" Margin="0,22,0,0" MinHeight="56" FontSize="22">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconGallery}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
-                            <TextBlock Text="Galería" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource DangerButton}" Command="{Binding CloseAppCommand}" Margin="0,10,0,0" MinHeight="56" FontSize="22">
+                    <Button Style="{StaticResource DangerButton}" Command="{Binding CloseAppCommand}" Margin="0,22,0,0" MinHeight="56" FontSize="22">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconClose}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
                             <TextBlock Text="Cerrar la app" VerticalAlignment="Center"/>
