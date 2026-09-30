@@ -21,3 +21,12 @@
 - El PNG tiene que medir **2500 × 3500**.
 - Al abrirlo, la ventana de la foto tiene que verse como un **damero** (transparente), no blanca.
 - Usá los logos originales en alta (PNG grande o SVG), no capturas de pantalla.
+
+## Marcos actuales (desde Canva)
+Los 3 marcos de la app salen del diseño de Canva **"back_600"** (la copia con el hueco ensanchado,
+ID `DAHWr480sps`; el original `DAHBzq9T8D4` quedó sin tocar). El hueco de la foto es un rectángulo
+verde `#7ED957`. Para regenerarlos después de cambiar algo en Canva:
+1. Exportar las 3 páginas en PNG a 2500 × 3500 (sin fondo transparente).
+2. `python3 procesar_marcos.py pagina1.png pagina2.png pagina3.png` → genera `Fondo_1/2/3.png`
+   (vuelve transparente el verde con bordes suaves y rellena el corte conocido de la cinta del marco 2).
+3. Copiarlos a `src/KCMundial.App/assets/` (o a `C:\KCMundial2\assets\`).
