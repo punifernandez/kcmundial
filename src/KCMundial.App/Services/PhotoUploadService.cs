@@ -25,27 +25,36 @@ public sealed class PhotoUploadService : IPhotoUploadService
             fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
             content.Add(fileContent, "file", suggestedFileName);
 
-            var response = await HttpClient.PostAsync(UploadUrl, content, cancellationToken).ConfigureAwait(false);
-            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            using var response = await HttpClient.PostAsync(UploadUrl, content, cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-            if (!response.IsSuccessStatusCode)
+            string? url = null;
+            string? error = null;
+            try
             {
-                var err = JsonSerializer.Deserialize<JsonElement>(json);
-                var msg = err.TryGetProperty("error", out var e) ? e.GetString() : response.ReasonPhrase;
-                _logger?.Warn($"Upload failed {response.StatusCode}: {msg}");
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    if (doc.RootElement.TryGetProperty("url", out var u)) url = u.GetString();
+                    if (doc.RootElement.TryGetProperty("error", out var e)) error = e.GetString();
+                }
+            }
+            catch (JsonException)
+            {
+                // El servidor no respondió JSON (página de error, proxy, etc.): se registra tal cual.
+                error = body;
+            }
+
+            if (!response.IsSuccessStatusCode || string.IsNullOrEmpty(url))
+            {
+                var snippet = (error ?? body).ReplaceLineEndings(" ");
+                if (snippet.Length > 300) snippet = snippet[..300] + "…";
+                _logger?.Warn($"Upload failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}, {jpegBytes.Length / 1024} KB, response: {snippet}");
                 return null;
             }
 
-            var doc = JsonSerializer.Deserialize<JsonElement>(json);
-            if (doc.TryGetProperty("url", out var urlNode))
-            {
-                var url = urlNode.GetString();
-                _logger?.Info($"Upload OK: {url}");
-                return url;
-            }
-
-            _logger?.Warn("Upload response missing 'url'");
-            return null;
+            _logger?.Info($"Upload OK ({jpegBytes.Length / 1024} KB): {url}");
+            return url;
         }
         catch (Exception ex)
         {

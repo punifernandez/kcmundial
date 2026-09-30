@@ -25,6 +25,12 @@ public interface ICameraManager : IDisposable
     Task StopPreviewAsync();
 
     /// <summary>
+    /// Switch the camera to its largest format ahead of the capture (e.g. when the countdown starts) so it can
+    /// refocus and settle exposure while the preview keeps running. No-op if unsupported.
+    /// </summary>
+    Task PrepareHighResAsync();
+
+    /// <summary>
     /// Capture a still from the current camera. With <paramref name="highRes"/> the camera briefly switches to its
     /// largest format; if that fails the latest preview frame is returned. Null only if nothing is available.
     /// </summary>

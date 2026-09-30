@@ -1,22 +1,23 @@
 # Cómo hacer los marcos en Canva
 
 ## Formato
-- **Tamaño:** 2400 × 3600 px, vertical (proporción 2:3).
-  En Canva: *Crear diseño → Tamaño personalizado → 2400 × 3600 px*.
-- Sirve igual para la **DNP DP-QW410 en papel 4×6"** (300 dpi) y para la **ampliación 20×30 cm** (~305 dpi), sin recortes.
+- **Tamaño:** 2500 × 3500 px, vertical (proporción 5:7, la de la figurita de 5×7 cm).
+  En Canva: *Crear diseño → Tamaño personalizado → 2500 × 3500 px*.
+- Con ese tamaño alcanza para la figurita impresa en la DNP y para la ampliación 20×30
+  (la figurita entera a 20×28 cm, con bandas del color del fondo arriba y abajo).
 
 ## Pasos
-1. Subí `plantilla_guias_2400x3600.png` a Canva y ponelo **arriba de todo**, ocupando todo el diseño. Bloqueá esa capa (candado).
+1. Subí `plantilla_guias_2500x3500.png` a Canva y ponelo **arriba de todo**, ocupando todo el diseño. Bloqueá esa capa (candado).
 2. Diseñá el marco debajo de la plantilla:
-   - **Rojo (3 mm):** se corta al imprimir. Poné ahí solo fondo, que se extienda hasta el borde.
-   - **Naranja (8 mm):** logos, textos y todo lo importante tiene que quedar **adentro** de esta línea.
+   - **Naranja:** logos, textos y todo lo importante tiene que quedar **adentro** de esta línea.
+     El fondo sí puede llegar hasta el borde.
    - **Azul:** ventana sugerida para la foto. Ese hueco tiene que quedar **vacío y transparente**. Puede tener otra forma (ovalada, con cintas encima, etc.).
    - **Verde:** donde va a caer la cara, más o menos. No tapes esa zona.
 3. **Borrá la capa de la plantilla** antes de exportar.
 4. Exportá: *Compartir → Descargar → PNG*, con **"Fondo transparente"** tildado (requiere Canva Pro) y al tamaño 1×.
-5. Nombres de archivo: `Fondo_1.png`, `Fondo_2.png`, `Fondo_3.png`.
+5. Nombres de archivo: `Fondo_1.png`, `Fondo_2.png`, `Fondo_3.png`. Van en la carpeta `assets` de la app.
 
 ## Chequeo rápido
-- El PNG tiene que medir exactamente **2400 × 3600**.
+- El PNG tiene que medir **2500 × 3500**.
 - Al abrirlo, la ventana de la foto tiene que verse como un **damero** (transparente), no blanca.
-- Los logos en alta: subí a Canva los logos originales (PNG grande o SVG), no capturas de pantalla.
+- Usá los logos originales en alta (PNG grande o SVG), no capturas de pantalla.

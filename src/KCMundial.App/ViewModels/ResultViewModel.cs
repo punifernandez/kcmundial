@@ -14,13 +14,13 @@ public abstract partial class PrintableFiguritaViewModel : ObservableObject
     private readonly PhotoPrinter _printer;
     private readonly int _copies;
 
-    protected PrintableFiguritaViewModel(string figuritaId, string printPath, PhotoPrinter printer, int copies)
+    protected PrintableFiguritaViewModel(string figuritaId, string displayPath, string printPath, PhotoPrinter printer, int copies)
     {
         FiguritaId = figuritaId;
         PrintPath = printPath;
         _printer = printer;
         _copies = copies;
-        FiguritaImage = QrImageFactory.LoadImage(printPath);
+        FiguritaImage = QrImageFactory.LoadImage(displayPath);
     }
 
     public string FiguritaId { get; }
@@ -83,9 +83,9 @@ public partial class ResultViewModel : PrintableFiguritaViewModel
     [ObservableProperty]
     private double _autoReturnRemaining = 1;
 
-    public ResultViewModel(string figuritaId, string printPath, string? qrUrl, INavigationService navigation,
+    public ResultViewModel(string figuritaId, string displayPath, string printPath, string? qrUrl, INavigationService navigation,
         PhotoPrinter printer, AppSettings settings)
-        : base(figuritaId, printPath, printer, settings.PrintCopies)
+        : base(figuritaId, displayPath, printPath, printer, settings.PrintCopies)
     {
         _navigation = navigation;
         _autoReturnAfter = TimeSpan.FromSeconds(settings.ResultAutoReturnSeconds);

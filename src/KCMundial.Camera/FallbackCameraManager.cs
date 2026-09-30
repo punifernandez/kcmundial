@@ -80,6 +80,8 @@ public sealed class FallbackCameraManager : ICameraManager
         await _dshow.StopPreviewAsync().ConfigureAwait(false);
     }
 
+    public Task PrepareHighResAsync() => _useDshow ? Task.CompletedTask : _mediaCapture.PrepareHighResAsync();
+
     public Task<CaptureResult?> CaptureStillAsync(bool highRes = true, CancellationToken cancellationToken = default)
     {
         if (_useDshow)

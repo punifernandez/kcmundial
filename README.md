@@ -1,14 +1,14 @@
 # KCMundial – Photobooth
 
-Photobooth para eventos: el invitado elige un marco, se saca la foto, se imprime sola en la **DNP DP-QW410 (4×6")**
-y se lleva la foto digital escaneando un QR. En el segundo monitor corre un video en loop y, después de cada foto,
+Photobooth para eventos: el invitado elige un marco, se saca la foto, se imprime sola como **figurita 5×7 cm en la
+DNP DP-QW410** (hoja 4×6 cortada al medio por la impresora) y se lleva la foto digital escaneando un QR. En el segundo monitor corre un video en loop y, después de cada foto,
 se muestra la figurita con el QR.
 
 ## Requisitos
 
 - Windows 10/11, .NET 8
 - Cámara **Logitech Brio 4K**, montada **vertical** (girada 90°)
-- Impresora **DNP DP-QW410** con su driver instalado y papel 4×6"
+- Impresora **DNP DP-QW410** con su driver instalado y papel 4×6" (imprime en 3×4" con corte automático)
 - Pantalla táctil vertical (principal) + monitor/TV (secundario, opcional)
 
 ## Compilar y correr
@@ -42,9 +42,10 @@ Todo queda en carpetas junto al `.exe`, con el mismo nombre de archivo (fecha_ho
 | Carpeta | Tamaño | Para qué |
 |---|---|---|
 | `raw/` | resolución completa de la cámara (Brio vertical: 2160×4096) | original, sin marco |
-| `figuritas_hd/` | lado largo 3600 px (con marcos 2:3: 2400×3600) | máster con marco |
-| `figuritas/` | 1200×1800 (4×6" a 300 dpi) | se imprime en la DNP, se muestra y se comparte por QR |
-| `ampliaciones_20x30/` | 2362×3543 (20×30 cm a 300 dpi) | para mandar a ampliar |
+| `figuritas_hd/` | lado largo 3600 px (con marcos 5:7: 2571×3600) | máster con marco |
+| `figuritas/` | 1182×1654 (5×7 cm a 600 dpi) | se muestra en pantalla y se comparte por QR |
+| `impresion/` | 900×1200 (3×4" a 300 dpi) | hoja para la DNP: la figurita entera, centrada, con margen blanco |
+| `ampliaciones_20x30/` | 2362×3543 (20×30 cm a 300 dpi) | la figurita entera a 20×28 cm con bandas del color del fondo |
 
 Todos los JPEG van marcados a 300 dpi.
 
@@ -56,20 +57,21 @@ Se crea junto al `.exe` la primera vez que se abre la app. Cambiá los valores y
 |---|---|---|
 | `CameraRotation` | `90` | Grados (horario) para enderezar la cámara vertical. Si la imagen sale cabeza abajo, poné `270`. |
 | `MirrorPreview` | `true` | Preview en espejo (la foto final nunca sale espejada). |
-| `HighResCapture` | `true` | Foto en la resolución máxima de la cámara. Si falla, usa el cuadro del preview. |
+| `HighResCapture` | `true` | Foto en la resolución máxima de la cámara: pasa a 4K al empezar la cuenta regresiva (para que enfoque) y se queda con el cuadro más nítido. Si falla, usa el cuadro del preview. |
 | `CountdownSeconds` | `3` | Cuenta regresiva. |
 | `ResultAutoReturnSeconds` | `25` | Segundos en la pantalla de resultado antes de volver solo al inicio. |
 | `AutoPrint` | `true` | Imprimir apenas se saca la foto. |
 | `PrinterName` | `""` | Nombre (o parte) de la impresora. Vacío = la primera que contenga "QW410". |
 | `PrintCopies` | `1` | Copias por foto. |
+| `PrintPageWidthInches` / `PrintPageHeightInches` | `3` / `4` | Tamaño de hoja en la DNP. Se elige el tamaño del driver más parecido (el log lista los disponibles: "driver paper sizes"). |
+| `PrintMarginMm` | `2` | Margen blanco alrededor de la figurita en la hoja. |
 | `UploadEnabled` | `true` | Subir la foto al servidor para el QR. Si no hay internet, el QR apunta a la red local. |
 
 ## Marcos
 
-`assets/Fondo_1.png`, `Fondo_2.png`, `Fondo_3.png`: PNG con la ventana de la foto **transparente**.
-Recomendado **2400×3600 (2:3)**: coincide con el papel 4×6" y con la ampliación 20×30, sin recortes.
-Plantilla e instrucciones para Canva: [`plantillas/`](plantillas/COMO_HACER_LOS_MARCOS.md).
-La app toma la proporción del marco, así que marcos de otro tamaño también funcionan.
+`assets/Fondo_1.png`, `Fondo_2.png`, `Fondo_3.png`: PNG con la ventana de la foto **transparente**, en proporción
+**5:7** (la figurita). Recomendado **2500×3500**. Plantilla e instrucciones para Canva:
+[`plantillas/`](plantillas/COMO_HACER_LOS_MARCOS.md). La app toma la proporción del marco.
 
 ## Segundo monitor
 

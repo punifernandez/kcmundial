@@ -7,6 +7,7 @@ public sealed class PathResolver : IPathResolver
     public string RootInstallPath { get; }
     public string RawFolder => Path.Combine(RootInstallPath, "raw");
     public string FiguritasFolder => Path.Combine(RootInstallPath, "figuritas");
+    public string ImpresionFolder => Path.Combine(RootInstallPath, "impresion");
     public string FiguritasHdFolder => Path.Combine(RootInstallPath, "figuritas_hd");
     public string Ampliaciones20x30Folder => Path.Combine(RootInstallPath, "ampliaciones_20x30");
     public string AssetsFolder => Path.Combine(RootInstallPath, "assets");
@@ -27,6 +28,7 @@ public sealed class PathResolver : IPathResolver
     {
         Directory.CreateDirectory(RawFolder);
         Directory.CreateDirectory(FiguritasFolder);
+        Directory.CreateDirectory(ImpresionFolder);
         Directory.CreateDirectory(FiguritasHdFolder);
         Directory.CreateDirectory(Ampliaciones20x30Folder);
         Directory.CreateDirectory(AssetsFolder);

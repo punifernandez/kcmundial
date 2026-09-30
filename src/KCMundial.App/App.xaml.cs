@@ -44,7 +44,8 @@ public partial class App : Application
 
         var metadataWriter = new MetadataWriter(pathResolver);
         _composer = new FiguritaComposer(_logger);
-        var exportService = new ExportService(pathResolver, new FileNaming(), _composer, metadataWriter,
+        var printPage = new PrintPageSpec(settings.PrintPageWidthInches, settings.PrintPageHeightInches, settings.PrintMarginMm);
+        var exportService = new ExportService(pathResolver, new FileNaming(), _composer, printPage, metadataWriter,
             settings.UploadEnabled ? new PhotoUploadService(_logger) : null, _logger);
         var printer = new PhotoPrinter(settings, _logger);
 

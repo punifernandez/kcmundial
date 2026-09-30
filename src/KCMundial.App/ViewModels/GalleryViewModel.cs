@@ -73,6 +73,7 @@ public partial class GalleryViewModel : ObservableObject
     {
         TryDelete(Path.Combine(pathResolver.FiguritasFolder, id + ".jpg"));
         TryDelete(Path.Combine(pathResolver.FiguritasFolder, id + ".json"));
+        TryDelete(Path.Combine(pathResolver.ImpresionFolder, id + ".jpg"));
         TryDelete(Path.Combine(pathResolver.FiguritasHdFolder, id + ".jpg"));
         TryDelete(Path.Combine(pathResolver.Ampliaciones20x30Folder, id + ".jpg"));
         TryDelete(Path.Combine(pathResolver.RawFolder, id + ".jpg"));

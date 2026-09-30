@@ -86,7 +86,7 @@ public partial class ShellViewModel : ObservableObject, INavigationService
     public void NavigateToResult(ExportResult result)
     {
         var qrUrl = QrUrlFor(result.Id);
-        CurrentViewModel = new ResultViewModel(result.Id, result.PrintPath, qrUrl, this, _printer, _settings);
+        CurrentViewModel = new ResultViewModel(result.Id, result.FiguritaPath, result.PrintPath, qrUrl, this, _printer, _settings);
         _secondaryDisplay?.ShowResult(result.Id, qrUrl);
     }
 
@@ -98,8 +98,11 @@ public partial class ShellViewModel : ObservableObject, INavigationService
 
     public void NavigateToGalleryDetail(string figuritaId)
     {
-        var printPath = Path.Combine(_pathResolver.FiguritasFolder, figuritaId + ".jpg");
-        CurrentViewModel = new GalleryDetailViewModel(figuritaId, printPath, QrUrlFor(figuritaId) ?? LocalUrl(figuritaId), this, _pathResolver, _printer, _settings);
+        var displayPath = Path.Combine(_pathResolver.FiguritasFolder, figuritaId + ".jpg");
+        // Fotos viejas pueden no tener hoja de impresión: se imprime la figurita (el printer la ajusta sin recortar).
+        var printPath = Path.Combine(_pathResolver.ImpresionFolder, figuritaId + ".jpg");
+        if (!File.Exists(printPath)) printPath = displayPath;
+        CurrentViewModel = new GalleryDetailViewModel(figuritaId, displayPath, printPath, QrUrlFor(figuritaId) ?? LocalUrl(figuritaId), this, _pathResolver, _printer, _settings);
         _secondaryDisplay?.ShowGalleryPhoto(figuritaId);
     }
 

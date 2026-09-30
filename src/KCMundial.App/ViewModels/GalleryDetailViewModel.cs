@@ -8,9 +8,9 @@ public partial class GalleryDetailViewModel : PrintableFiguritaViewModel
     private readonly INavigationService _navigation;
     private readonly Core.Interfaces.IPathResolver _pathResolver;
 
-    public GalleryDetailViewModel(string figuritaId, string printPath, string qrUrl, INavigationService navigation,
+    public GalleryDetailViewModel(string figuritaId, string displayPath, string printPath, string qrUrl, INavigationService navigation,
         Core.Interfaces.IPathResolver pathResolver, PhotoPrinter printer, AppSettings settings)
-        : base(figuritaId, printPath, printer, settings.PrintCopies)
+        : base(figuritaId, displayPath, printPath, printer, settings.PrintCopies)
     {
         _navigation = navigation;
         _pathResolver = pathResolver;

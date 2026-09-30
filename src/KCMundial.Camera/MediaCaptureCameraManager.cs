@@ -262,11 +262,22 @@ public sealed class MediaCaptureCameraManager : ICameraManager
     {
         "NV12", "YUY2", "MJPG", "RGB24", "RGB32", "ARGB32", "BGRA8", "BGR8"
     };
-    private const int HighResSkipFrames = 2;
-    private static readonly TimeSpan HighResTimeout = TimeSpan.FromSeconds(4);
+    /// <summary>Tiempo mínimo en 4K antes de tomar la foto, para que la cámara reenfoque y ajuste la exposición.</summary>
+    private const int HighResSettleMs = 1000;
+    /// <summary>Cuadros candidatos al disparar: se queda el más nítido.</summary>
+    private const int HighResCandidates = 4;
+    private static readonly TimeSpan HighResGrabTimeout = TimeSpan.FromSeconds(3);
+    /// <summary>Si nadie dispara, volver solo al formato del preview.</summary>
+    private static readonly TimeSpan HighResAutoRevert = TimeSpan.FromSeconds(20);
 
     private readonly SemaphoreSlim _opLock = new(1, 1);
     private volatile bool _suspendPreviewFrames;
+    // Modo 4K (desde la cuenta regresiva hasta la foto)
+    private volatile bool _highResActive;
+    private readonly Stopwatch _highResClock = new();
+    private int _highResGeneration;
+    private byte[]? _highResScratch;
+    private volatile FrameGrabber? _grabber;
     private byte[]? _latestFrame;
     private int _latestFrameWidth;
     private int _latestFrameHeight;
@@ -473,12 +484,35 @@ public sealed class MediaCaptureCameraManager : ICameraManager
             }
 
             var callback = _lastOnFrame;
+            if (!_highResActive)
+            {
+                lock (_snapshotLock)
+                {
+                    if (!CopyBgra(bitmap, ref _latestFrame, out var w, out var h)) return;
+                    _latestFrameWidth = w;
+                    _latestFrameHeight = h;
+                    callback?.Invoke(_latestFrame!, w, h);
+                }
+                return;
+            }
+
+            // En 4K: los cuadros candidatos para la foto van enteros; el preview recibe uno de cada dos a media resolución.
+            var grabber = _grabber;
+            if (grabber != null)
+            {
+                byte[]? full = null;
+                if (CopyBgra(bitmap, ref full, out var fw, out var fh))
+                    grabber.Offer(full!, fw, fh);
+                return;
+            }
+            if (_frameCount % 2 != 0) return;
             lock (_snapshotLock)
             {
-                if (!CopyBgra(bitmap, ref _latestFrame, out var w, out var h)) return;
-                _latestFrameWidth = w;
-                _latestFrameHeight = h;
-                callback?.Invoke(_latestFrame!, w, h);
+                if (!CopyBgra(bitmap, ref _highResScratch, out var w, out var h)) return;
+                HalveBgra(_highResScratch!, w, h, ref _latestFrame, out var hw, out var hh);
+                _latestFrameWidth = hw;
+                _latestFrameHeight = hh;
+                callback?.Invoke(_latestFrame!, hw, hh);
             }
         }
         catch (Exception ex)
@@ -572,6 +606,27 @@ public sealed class MediaCaptureCameraManager : ICameraManager
             _logger?.Info("StopPreview: stopped");
     }
 
+    /// <summary>
+    /// Pasa la cámara a su formato más grande (se llama al empezar la cuenta regresiva): el preview sigue en vivo y
+    /// la cámara tiene tiempo de enfocar y ajustar la exposición antes de la foto.
+    /// </summary>
+    public async Task PrepareHighResAsync()
+    {
+        await _opLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await EnterHighResCoreAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("PrepareHighRes: could not switch to high-res", ex);
+        }
+        finally
+        {
+            _opLock.Release();
+        }
+    }
+
     public async Task<CaptureResult?> CaptureStillAsync(bool highRes = true, CancellationToken cancellationToken = default)
     {
         await _opLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -580,8 +635,20 @@ public sealed class MediaCaptureCameraManager : ICameraManager
             CaptureResult? result = null;
             if (highRes)
             {
-                try { result = await CaptureHighResCoreAsync(cancellationToken).ConfigureAwait(false); }
-                catch (Exception ex) { _logger?.Error("CaptureStill: high-res capture failed, using preview frame", ex); }
+                try
+                {
+                    await EnterHighResCoreAsync().ConfigureAwait(false);
+                    if (_highResActive)
+                        result = await GrabSharpestAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Error("CaptureStill: high-res capture failed, using preview frame", ex);
+                }
+                finally
+                {
+                    await ExitHighResCoreAsync().ConfigureAwait(false);
+                }
             }
             return result ?? SnapshotPreviewFrame();
         }
@@ -605,103 +672,64 @@ public sealed class MediaCaptureCameraManager : ICameraManager
         }
     }
 
-    private async Task<CaptureResult?> CaptureHighResCoreAsync(CancellationToken cancellationToken)
+    /// <summary>Cambia al formato máximo si se puede y todavía no está. Requiere _opLock.</summary>
+    private async Task EnterHighResCoreAsync()
     {
-        MediaCapture? capture;
-        MediaFrameReader? previewReader;
-        MediaFrameSource? source;
+        if (_highResActive) return;
         MediaFrameFormat? previewFormat, maxFormat;
         lock (_lock)
         {
-            capture = _mediaCapture;
-            previewReader = _frameReader;
-            source = _currentFrameSource;
             previewFormat = _previewFormat;
             maxFormat = _maxCaptureFormat;
         }
-        if (capture == null || previewReader == null || source == null || previewFormat == null || maxFormat == null)
-            return null;
+        if (_mediaCapture == null || previewFormat == null || maxFormat == null) return;
         if (!_canSetFormat || Pixels(maxFormat) <= Pixels(previewFormat))
         {
-            _logger?.Info("CaptureStill: high-res not available (shared mode or preview already at max)");
-            return null;
+            _logger?.Info("HighRes: not available (shared mode or preview already at max)");
+            return;
         }
 
         var sw = Stopwatch.StartNew();
-        _suspendPreviewFrames = true;
-        CaptureResult? result = null;
-        try
+        _highResActive = true;
+        _highResClock.Restart();
+        if (!await SwitchFormatAsync(maxFormat).ConfigureAwait(false))
         {
-            await previewReader.StopAsync().AsTask().ConfigureAwait(false);
-            await source.SetFormatAsync(maxFormat).AsTask().ConfigureAwait(false);
-            var switchMs = sw.ElapsedMilliseconds;
+            _highResActive = false;
+            await SwitchFormatAsync(previewFormat).ConfigureAwait(false);
+            return;
+        }
+        _logger?.Info($"HighRes: switched to {Describe(maxFormat)} in {sw.ElapsedMilliseconds} ms");
 
-            using var stillReader = await CreateBgraReaderAsync(capture, source).ConfigureAwait(false);
-            var tcs = new TaskCompletionSource<CaptureResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var seen = 0;
-            stillReader.FrameArrived += (s, _) =>
+        var generation = Interlocked.Increment(ref _highResGeneration);
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(HighResAutoRevert).ConfigureAwait(false);
+            if (generation != Volatile.Read(ref _highResGeneration) || !_highResActive) return;
+            await _opLock.WaitAsync().ConfigureAwait(false);
+            try
             {
-                try
+                if (generation == Volatile.Read(ref _highResGeneration))
                 {
-                    using var frame = s.TryAcquireLatestFrame();
-                    var bitmap = frame?.VideoMediaFrame?.SoftwareBitmap;
-                    // Los primeros cuadros después de cambiar de formato pueden venir mal expuestos.
-                    if (bitmap == null || Interlocked.Increment(ref seen) <= HighResSkipFrames || tcs.Task.IsCompleted) return;
-                    byte[]? data = null;
-                    if (CopyBgra(bitmap, ref data, out var w, out var h))
-                        tcs.TrySetResult(new CaptureResult { Bgra = data!, Width = w, Height = h, IsHighRes = true });
+                    _logger?.Warn("HighRes: no capture happened, returning to preview format");
+                    await ExitHighResCoreAsync().ConfigureAwait(false);
                 }
-                catch (Exception ex) { tcs.TrySetException(ex); }
-            };
-
-            var status = await stillReader.StartAsync().AsTask().ConfigureAwait(false);
-            if (status == MediaFrameReaderStartStatus.Success)
-            {
-                var winner = await Task.WhenAny(tcs.Task, Task.Delay(HighResTimeout, cancellationToken)).ConfigureAwait(false);
-                if (winner == tcs.Task) result = await tcs.Task.ConfigureAwait(false);
-                else _logger?.Warn("CaptureStill: timed out waiting for high-res frame");
             }
-            else
-            {
-                _logger?.Warn($"CaptureStill: still reader start failed ({status})");
-            }
-            await stillReader.StopAsync().AsTask().ConfigureAwait(false);
-            _logger?.Info($"CaptureStill: high-res {(result != null ? $"{result.Width}x{result.Height}" : "failed")}, format switch {switchMs} ms, total {sw.ElapsedMilliseconds} ms");
-        }
-        finally
-        {
-            await RestorePreviewAsync(capture, source, previewFormat).ConfigureAwait(false);
-            _suspendPreviewFrames = false;
-        }
-        return result;
+            finally { _opLock.Release(); }
+        });
     }
 
-    /// <summary>Vuelve al formato del preview con un reader nuevo. Si falla, reinicia la cámara completa.</summary>
-    private async Task RestorePreviewAsync(MediaCapture capture, MediaFrameSource source, MediaFrameFormat previewFormat)
+    /// <summary>Vuelve al formato del preview. Requiere _opLock.</summary>
+    private async Task ExitHighResCoreAsync()
     {
-        try
+        if (!_highResActive) return;
+        Interlocked.Increment(ref _highResGeneration);
+        _highResActive = false;
+        _grabber = null;
+        MediaFrameFormat? previewFormat;
+        lock (_lock) previewFormat = _previewFormat;
+        if (previewFormat != null && !await SwitchFormatAsync(previewFormat).ConfigureAwait(false))
         {
-            await source.SetFormatAsync(previewFormat).AsTask().ConfigureAwait(false);
-            var reader = await CreateBgraReaderAsync(capture, source).ConfigureAwait(false);
-            reader.FrameArrived += OnFrameArrived;
-            MediaFrameReader? old;
-            lock (_lock)
-            {
-                old = _frameReader;
-                _frameReader = reader;
-            }
-            if (old != null)
-            {
-                old.FrameArrived -= OnFrameArrived;
-                old.Dispose();
-            }
-            var status = await reader.StartAsync().AsTask().ConfigureAwait(false);
-            if (status != MediaFrameReaderStartStatus.Success)
-                throw new InvalidOperationException($"preview reader restart: {status}");
-        }
-        catch (Exception ex)
-        {
-            _logger?.Error("CaptureStill: could not restore preview, restarting camera", ex);
+            _logger?.Error("HighRes: could not restore preview format, restarting camera");
             CameraDevice? device;
             Action<byte[], int, int>? onFrame;
             lock (_lock)
@@ -711,6 +739,158 @@ public sealed class MediaCaptureCameraManager : ICameraManager
             }
             if (device != null && onFrame != null)
                 await StartPreviewCoreAsync(device, onFrame, CancellationToken.None).ConfigureAwait(false);
+        }
+        lock (_snapshotLock) _highResScratch = null;
+    }
+
+    /// <summary>Espera a que la cámara se estabilice y devuelve el más nítido de los próximos cuadros.</summary>
+    private async Task<CaptureResult?> GrabSharpestAsync(CancellationToken cancellationToken)
+    {
+        var wait = HighResSettleMs - (int)_highResClock.ElapsedMilliseconds;
+        if (wait > 0)
+            await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+
+        var sw = Stopwatch.StartNew();
+        var grabber = new FrameGrabber(HighResCandidates);
+        _grabber = grabber;
+        try
+        {
+            var winner = await Task.WhenAny(grabber.Completion, Task.Delay(HighResGrabTimeout, cancellationToken)).ConfigureAwait(false);
+            if (winner != grabber.Completion)
+                _logger?.Warn($"CaptureStill: only {grabber.Count} high-res frame(s) arrived in {HighResGrabTimeout.TotalSeconds:0} s");
+        }
+        finally
+        {
+            _grabber = null;
+        }
+
+        var best = grabber.Best;
+        _logger?.Info(best != null
+            ? $"CaptureStill: high-res {best.Width}x{best.Height}, {grabber.Count} candidates, sharpness [{string.Join(", ", grabber.Scores.Select(x => x.ToString("0.0")))}], " +
+              $"settled {_highResClock.ElapsedMilliseconds - sw.ElapsedMilliseconds} ms, grab {sw.ElapsedMilliseconds} ms"
+            : "CaptureStill: no high-res frame");
+        return best;
+    }
+
+    /// <summary>
+    /// Detiene el reader actual, cambia el formato de la fuente y arranca un reader nuevo.
+    /// Requiere _opLock. Devuelve false si algo falló.
+    /// </summary>
+    private async Task<bool> SwitchFormatAsync(MediaFrameFormat format)
+    {
+        MediaCapture? capture;
+        MediaFrameSource? source;
+        MediaFrameReader? old;
+        lock (_lock)
+        {
+            capture = _mediaCapture;
+            source = _currentFrameSource;
+            old = _frameReader;
+        }
+        if (capture == null || source == null) return false;
+        try
+        {
+            _suspendPreviewFrames = true;
+            if (old != null)
+            {
+                old.FrameArrived -= OnFrameArrived;
+                await old.StopAsync().AsTask().ConfigureAwait(false);
+            }
+            await source.SetFormatAsync(format).AsTask().ConfigureAwait(false);
+            var reader = await CreateBgraReaderAsync(capture, source).ConfigureAwait(false);
+            reader.FrameArrived += OnFrameArrived;
+            lock (_lock) _frameReader = reader;
+            old?.Dispose();
+            var status = await reader.StartAsync().AsTask().ConfigureAwait(false);
+            if (status != MediaFrameReaderStartStatus.Success)
+            {
+                _logger?.Warn($"SwitchFormat: reader start {status} for {Describe(format)}");
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error($"SwitchFormat: {Describe(format)} failed", ex);
+            return false;
+        }
+        finally
+        {
+            _suspendPreviewFrames = false;
+        }
+    }
+
+    /// <summary>Reduce un cuadro BGRA a la mitad (un píxel de cada 2×2), para el preview en modo 4K.</summary>
+    private static void HalveBgra(byte[] source, int width, int height, ref byte[]? target, out int outW, out int outH)
+    {
+        outW = width / 2;
+        outH = height / 2;
+        var size = outW * outH * 4;
+        if (target == null || target.Length != size) target = new byte[size];
+        var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(source.AsSpan());
+        var dst = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(target.AsSpan());
+        for (var y = 0; y < outH; y++)
+        {
+            var srcRow = src.Slice(y * 2 * width, width);
+            var dstRow = dst.Slice(y * outW, outW);
+            for (var x = 0; x < outW; x++)
+                dstRow[x] = srcRow[x * 2];
+        }
+    }
+
+    /// <summary>Junta los próximos N cuadros y se queda con el más nítido.</summary>
+    private sealed class FrameGrabber
+    {
+        private readonly int _wanted;
+        private readonly object _lock = new();
+        private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private double _bestScore = double.MinValue;
+
+        public FrameGrabber(int wanted) => _wanted = wanted;
+
+        public Task Completion => _done.Task;
+        public CaptureResult? Best { get; private set; }
+        public List<double> Scores { get; } = new();
+        public int Count { get { lock (_lock) return Scores.Count; } }
+
+        public void Offer(byte[] bgra, int width, int height)
+        {
+            var score = Sharpness(bgra, width, height);
+            lock (_lock)
+            {
+                if (Scores.Count >= _wanted) return;
+                Scores.Add(score);
+                if (score > _bestScore)
+                {
+                    _bestScore = score;
+                    Best = new CaptureResult { Bgra = bgra, Width = width, Height = height, IsHighRes = true };
+                }
+                if (Scores.Count >= _wanted) _done.TrySetResult();
+            }
+        }
+
+        /// <summary>Nitidez: energía de bordes del canal verde en la zona central (donde está la cara).</summary>
+        private static double Sharpness(byte[] bgra, int width, int height)
+        {
+            const int step = 3;
+            var x0 = width / 4;
+            var x1 = width * 3 / 4 - step;
+            var y0 = height / 4;
+            var y1 = height * 3 / 4 - step;
+            long sum = 0;
+            long n = 0;
+            var stride = width * 4;
+            for (var y = y0; y < y1; y += step)
+            {
+                var row = y * stride;
+                for (var x = x0; x < x1; x += step)
+                {
+                    int g = bgra[row + x * 4 + 1];
+                    sum += Math.Abs(bgra[row + (x + step) * 4 + 1] - g) + Math.Abs(bgra[row + step * stride + x * 4 + 1] - g);
+                    n++;
+                }
+            }
+            return n == 0 ? 0 : (double)sum / n;
         }
     }
 

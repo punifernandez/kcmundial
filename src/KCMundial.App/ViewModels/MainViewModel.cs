@@ -383,6 +383,8 @@ public partial class MainViewModel : ObservableObject
         GuidanceMessage = "";
         try
         {
+            // La cámara pasa a 4K durante la cuenta regresiva: enfoca y expone antes de la foto.
+            var prepare = _settings.HighResCapture ? _cameraManager.PrepareHighResAsync() : Task.CompletedTask;
             IsCountdownVisible = true;
             for (var i = _settings.CountdownSeconds; i >= 1; i--)
             {
@@ -392,11 +394,11 @@ public partial class MainViewModel : ObservableObject
             }
             IsCountdownVisible = false;
 
+            await prepare;
             PlaySound("shutter");
             FlashRequested?.Invoke();
-            // El cartel tapa el instante en que la cámara cambia a 4K y el preview se congela.
-            IsProcessingVisible = true;
             var capture = await _cameraManager.CaptureStillAsync(_settings.HighResCapture);
+            IsProcessingVisible = true;
             if (capture == null)
             {
                 CameraError = "No se pudo sacar la foto. Probá de nuevo.";

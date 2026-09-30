@@ -3,13 +3,13 @@ using SkiaSharp;
 
 namespace KCMundial.Processing;
 
-/// <summary>Tamaños de salida (a 300 dpi).</summary>
+/// <summary>Tamaños de salida.</summary>
 public static class OutputSizes
 {
-    /// <summary>Lado largo del máster (foto + marco). Con marcos 2:3 queda en 2400×3600.</summary>
+    /// <summary>Lado largo del máster (foto + marco). Con la figurita 5:7 queda en 2571×3600.</summary>
     public const int MasterLongSide = 3600;
-    /// <summary>DNP DP-QW410, papel 4×6" a 300 dpi.</summary>
-    public static readonly SKSizeI Print4x6 = new(1200, 1800);
+    /// <summary>Figurita clásica 5×7 cm a 600 dpi (pantallas, QR, galería).</summary>
+    public static readonly SKSizeI Figurita = new(1182, 1654);
     /// <summary>Ampliación 20×30 cm a 300 dpi.</summary>
     public static readonly SKSizeI Print20x30 = new(2362, 3543);
     public const int Dpi = 300;
@@ -25,8 +25,8 @@ public sealed class FiguritaComposer : IDisposable
     private readonly object _cacheLock = new();
     private readonly Dictionary<string, (DateTime WriteTime, SKImage Image)> _frameCache = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Proporción usada cuando no hay marco (2:3 vertical, igual que el papel 4×6").</summary>
-    public const double DefaultAspect = 2.0 / 3.0;
+    /// <summary>Proporción usada cuando no hay marco (figurita 5×7).</summary>
+    public const double DefaultAspect = 5.0 / 7.0;
 
     public FiguritaComposer(IAppLogger? logger = null)
     {
@@ -61,7 +61,7 @@ public sealed class FiguritaComposer : IDisposable
 
     public static int NormalizeRotation(int degrees) => ((degrees % 360) + 360) % 360 / 90 * 90;
 
-    /// <summary>Proporción (ancho/alto) del marco, o 2:3 si no existe.</summary>
+    /// <summary>Proporción (ancho/alto) del marco, o 5:7 si no existe.</summary>
     public double GetFrameAspect(string? framePath)
     {
         var frame = GetFrame(framePath);
@@ -114,6 +114,82 @@ public sealed class FiguritaComposer : IDisposable
         var bytes = data.ToArray();
         SetJfifDpi(bytes, OutputSizes.Dpi);
         return bytes;
+    }
+
+    /// <summary>
+    /// Hoja para la impresora: la figurita entera (sin recortar) centrada en una hoja blanca del tamaño indicado,
+    /// dejando un margen para lo que recorta la impresora al imprimir sin bordes.
+    /// </summary>
+    public static SKImage RenderPrintPage(SKImage figurita, double pageWidthInches, double pageHeightInches, double marginMm)
+    {
+        var w = (int)Math.Round(pageWidthInches * OutputSizes.Dpi);
+        var h = (int)Math.Round(pageHeightInches * OutputSizes.Dpi);
+        var margin = (float)(marginMm / 25.4 * OutputSizes.Dpi);
+        using var surface = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul))
+            ?? throw new InvalidOperationException("No se pudo crear la hoja de impresión.");
+        surface.Canvas.Clear(SKColors.White);
+        var area = SKRect.Create(margin, margin, w - 2 * margin, h - 2 * margin);
+        using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true, IsDither = true };
+        surface.Canvas.DrawImage(figurita, FitRect(figurita.Width, figurita.Height, area), paint);
+        surface.Canvas.Flush();
+        return surface.Snapshot();
+    }
+
+    /// <summary>
+    /// La figurita entera en un lienzo de otra proporción (p. ej. 20×30), rellenando lo que sobra con el color
+    /// del borde del marco (arriba/abajo o izquierda/derecha).
+    /// </summary>
+    public static SKImage RenderWithBands(SKImage figurita, SKSizeI size)
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(size.Width, size.Height, SKColorType.Rgba8888, SKAlphaType.Premul))
+            ?? throw new InvalidOperationException("No se pudo crear el lienzo.");
+        var canvas = surface.Canvas;
+        var dest = FitRect(figurita.Width, figurita.Height, SKRect.Create(size.Width, size.Height));
+        var horizontal = dest.Height < size.Height; // sobra alto → bandas arriba y abajo
+        var (first, second) = EdgeColors(figurita, horizontal);
+        var firstHalf = horizontal ? SKRect.Create(0, 0, size.Width, size.Height / 2f) : SKRect.Create(0, 0, size.Width / 2f, size.Height);
+        var secondHalf = horizontal ? SKRect.Create(0, size.Height / 2f, size.Width, size.Height / 2f) : SKRect.Create(size.Width / 2f, 0, size.Width / 2f, size.Height);
+        using (var fill = new SKPaint { Color = first }) canvas.DrawRect(firstHalf, fill);
+        using (var fill = new SKPaint { Color = second }) canvas.DrawRect(secondHalf, fill);
+        using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true, IsDither = true };
+        canvas.DrawImage(figurita, dest, paint);
+        canvas.Flush();
+        return surface.Snapshot();
+    }
+
+    /// <summary>Color promedio de los bordes opuestos (arriba/abajo o izquierda/derecha).</summary>
+    private static (SKColor First, SKColor Second) EdgeColors(SKImage image, bool horizontalBands)
+    {
+        const int sample = 64;
+        using var small = new SKBitmap(sample, sample, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(small))
+        using (var paint = new SKPaint { FilterQuality = SKFilterQuality.Medium })
+            canvas.DrawImage(image, SKRect.Create(sample, sample), paint);
+
+        SKColor Average(Func<int, (int X, int Y)> at)
+        {
+            long r = 0, g = 0, b = 0;
+            for (var i = 0; i < sample; i++)
+            {
+                var (x, y) = at(i);
+                var c = small.GetPixel(x, y);
+                r += c.Red; g += c.Green; b += c.Blue;
+            }
+            return new SKColor((byte)(r / sample), (byte)(g / sample), (byte)(b / sample));
+        }
+
+        return horizontalBands
+            ? (Average(i => (i, 0)), Average(i => (i, sample - 1)))
+            : (Average(i => (0, i)), Average(i => (sample - 1, i)));
+    }
+
+    /// <summary>Rectángulo centrado dentro de <paramref name="area"/> que mantiene la proporción (sin recortar).</summary>
+    public static SKRect FitRect(int srcW, int srcH, SKRect area)
+    {
+        var scale = Math.Min(area.Width / srcW, area.Height / srcH);
+        var w = srcW * scale;
+        var h = srcH * scale;
+        return SKRect.Create(area.Left + (area.Width - w) / 2, area.Top + (area.Height - h) / 2, w, h);
     }
 
     /// <summary>Rectángulo de la fuente que, escalado, cubre exactamente el destino (recorte centrado).</summary>

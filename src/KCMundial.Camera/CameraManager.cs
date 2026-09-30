@@ -313,6 +313,8 @@ public sealed class CameraManager : ICameraManager
         _logger?.Info("StopPreview: stopped");
     }
 
+    public Task PrepareHighResAsync() => Task.CompletedTask;
+
     /// <summary>DirectShow es solo respaldo: devuelve el último cuadro del preview (sin cambio a 4K).</summary>
     public Task<CaptureResult?> CaptureStillAsync(bool highRes = true, CancellationToken cancellationToken = default)
     {
