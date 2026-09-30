@@ -3,29 +3,72 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             mc:Ignorable="d" d:DesignHeight="1080" d:DesignWidth="600">
-    <Grid Background="{StaticResource BgPrimaryBrush}">
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-            <Border Background="{StaticResource BgCardBrush}" CornerRadius="16" Padding="24" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" CornerRadius="12" Margin="0,0,24,0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" ClipToBounds="True">
-                        <Image Source="{Binding FiguritaImage}" MaxWidth="320" MaxHeight="440"/>
-                    </Border>
-                    <Image Source="{Binding QrImage}" Width="160" Height="160" Grid.Column="1" VerticalAlignment="Center"/>
-                </Grid>
-            </Border>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,24,0,0">
-                <Button x:Name="BtnPrint" Content="Imprimir" Command="{Binding PrintCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,12,0"
-                        Visibility="{Binding IsPrintButtonVisible, Converter={StaticResource BoolToVisibility}}"/>
-                <Button Content="Volver" Command="{Binding BackCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,12,0"/>
-                <Button Content="Borrar" Command="{Binding DeleteCommand}" Style="{StaticResource DangerButton}"/>
-            </StackPanel>
-            <TextBlock Text="{Binding PrintStatusMessage}" Margin="0,8,0,0" HorizontalAlignment="Center" Style="{StaticResource Caption}"
-                       Visibility="{Binding PrintStatusMessage, Converter={StaticResource NullToVisibility}}"/>
-        </StackPanel>
+             mc:Ignorable="d" d:DesignHeight="1920" d:DesignWidth="1080">
+    <Grid Background="{StaticResource AppBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="40,36,40,8">
+            <Button Style="{StaticResource RoundIconButton}" Command="{Binding BackCommand}" HorizontalAlignment="Left" ToolTip="Volver">
+                <Path Data="{StaticResource IconBack}" Style="{StaticResource Icon}"/>
+            </Button>
+            <TextBlock Text="{Binding FiguritaId}" Style="{StaticResource TitleMedium}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+
+        <Border Grid.Row="1" Margin="80,20" HorizontalAlignment="Center" VerticalAlignment="Center" Background="White" Padding="10" CornerRadius="18">
+            <Border.Effect>
+                <DropShadowEffect Color="Black" BlurRadius="50" ShadowDepth="12" Opacity="0.5"/>
+            </Border.Effect>
+            <Image Source="{Binding FiguritaImage}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+        </Border>
+
+        <Border Grid.Row="2" Style="{StaticResource GlassCard}" Margin="60,12,60,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="200" Height="200" Background="White" CornerRadius="20" Padding="8">
+                    <Image Source="{Binding QrImage}" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="32,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Escaneá y llevate tu foto" Style="{StaticResource TitleLarge}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0"
+                                Visibility="{Binding PrintStatusMessage, Converter={StaticResource NullToVisibility}}">
+                        <Control Style="{StaticResource Spinner}" Width="26" Height="26" Foreground="{StaticResource GoldBrush}" Margin="0,0,12,0"
+                                 Visibility="{Binding IsPrinting, Converter={StaticResource BoolToVisibility}}"/>
+                        <Path Data="{StaticResource IconCheck}" Fill="{StaticResource SuccessBrush}" Width="28" Height="28" Stretch="Uniform" Margin="0,0,12,0"
+                              Visibility="{Binding IsPrintDone, Converter={StaticResource BoolToVisibility}}"/>
+                        <Path Data="{StaticResource IconAlert}" Fill="{StaticResource DangerBrush}" Width="28" Height="28" Stretch="Uniform" Margin="0,0,12,0"
+                              Visibility="{Binding IsPrintError, Converter={StaticResource BoolToVisibility}}"/>
+                        <TextBlock Text="{Binding PrintStatusMessage}" Style="{StaticResource Body}" VerticalAlignment="Center" MaxWidth="480"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="60,28,60,48">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="24"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Style="{StaticResource DangerButton}" Command="{Binding DeleteCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource IconTrash}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
+                    <TextBlock Text="BORRAR" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Command="{Binding PrintCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
+                    <TextBlock Text="IMPRIMIR" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
     </Grid>
 </UserControl>

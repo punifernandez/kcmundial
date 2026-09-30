@@ -1,103 +1,92 @@
-# KCMundial – Kiosk Photo Booth
+# KCMundial – Photobooth
 
-Production-ready kiosk-style photo booth application for live events. Captures photos, composes "figurita" cards with a template background, and serves a mobile-friendly page via QR for download and share.
+Photobooth para eventos: el invitado elige un marco, se saca la foto, se imprime sola en la **DNP DP-QW410 (4×6")**
+y se lleva la foto digital escaneando un QR. En el segundo monitor corre un video en loop y, después de cada foto,
+se muestra la figurita con el QR.
 
-## Requirements
+## Requisitos
 
-- **Platform:** Windows 10/11  
-- **Runtime:** .NET 8  
-- **UI:** WPF (MVVM), fullscreen portrait  
-- **Camera:** Logitech Brio 4K or similar USB webcam  
+- Windows 10/11, .NET 8
+- Cámara **Logitech Brio 4K**, montada **vertical** (girada 90°)
+- Impresora **DNP DP-QW410** con su driver instalado y papel 4×6"
+- Pantalla táctil vertical (principal) + monitor/TV (secundario, opcional)
 
-## Solution Structure
-
-- **KCMundial.App** – WPF UI (Views, ViewModels, Converters, Services)  
-- **KCMundial.Core** – Interfaces and models  
-- **KCMundial.Storage** – Paths, file naming, metadata  
-- **KCMundial.Camera** – Camera enumeration, preview, high-res capture (OpenCvSharp)  
-- **KCMundial.Vision** – Face detection (Haar cascade), positioning validator  
-- **KCMundial.Processing** – Sticker composition (SkiaSharp), export pipeline  
-- **KCMundial.ShareServer** – In-process HTTP server (ASP.NET Core Minimal API) for QR page  
-
-## Build
-
-1. Open `KCMundial.sln` in Visual Studio 2022 (or later) or use:
-
-   ```bash
-   dotnet restore
-   dotnet build
-   ```
-
-2. Run the app:
-
-   ```bash
-   dotnet run --project src\KCMundial.App\KCMundial.App.csproj
-   ```
-
-   Or run `src\KCMundial.App\bin\Debug\net8.0-windows\KCMundial.App.exe` after building.
-
-## Assets (required for full functionality)
-
-At runtime the app looks for an **`assets`** folder next to the executable (same folder as the .exe, or the folder referenced in `src\KCMundial.App\assets` if you copy it to output).
-
-Place in `assets`:
-
-| File | Description |
-|------|-------------|
-| **back_300.png** | Background template for 300 DPI output. Size: **591 × 827 px**. |
-| **back_600.png** | Background template for HD output. Size: **1182 × 1654 px**. |
-| **haarcascade_frontalface_default.xml** | OpenCV Haar cascade for face detection. ✅ **Already included in the project** - no need to download. |
-
-- If **back_300.png** / **back_600.png** are missing, composition still runs but no background is drawn.  
-- **haarcascade_frontalface_default.xml** is included by default - face detection will work out of the box.
-
-The `assets` folder is automatically copied to the build output (configured in `KCMundial.App.csproj`). You only need to add **back_300.png** and **back_600.png** to the `src\KCMundial.App\assets\` folder - **haarcascade_frontalface_default.xml** is already included.
-
-## NuGet Packages
-
-| Project | Packages |
-|---------|----------|
-| KCMundial.Camera | OpenCvSharp4, OpenCvSharp4.runtime.win |
-| KCMundial.Vision | OpenCvSharp4, OpenCvSharp4.runtime.win |
-| KCMundial.Processing | SkiaSharp |
-| KCMundial.ShareServer | (FrameworkReference: Microsoft.AspNetCore.App) |
-| KCMundial.App | CommunityToolkit.Mvvm, QRCoder, FrameworkReference: Microsoft.AspNetCore.App, project refs to all above |
-
-Restore with:
+## Compilar y correr
 
 ```bash
-dotnet restore
+dotnet build KCMundial.sln -c Release
+dotnet run --project src\KCMundial.App\KCMundial.App.csproj -c Release
 ```
 
-## Calibrating face size (min/max width ratio)
+### Instalar en la PC del evento
 
-The positioning validator uses:
+**KCMundial 2 es una instalación aparte:** se llama `KCMundial2.exe`, va en `C:\KCMundial2` y guarda todo
+(configuración, fotos, log) en esa carpeta. La app vieja no se toca.
 
-- **MinFaceWidthRatio** = 0.12 (face width ≥ 12% of frame width)  
-- **MaxFaceWidthRatio** = 0.22 (face width ≤ 22% of frame width)  
+Con el repo clonado en la PC, doble clic en **`publicar.bat`** (o desde una terminal):
 
-These are defined in **KCMundial.Vision** → `PositioningValidator.cs` (properties `MinFaceWidthRatio` and `MaxFaceWidthRatio`). Adjust them if users are told to “Acercate”/“Alejate” too often or not enough:
+```bash
+publicar.bat
+```
 
-- **Larger min** (e.g. 0.14) → face must be closer (larger in frame).  
-- **Smaller max** (e.g. 0.20) → face must be farther (smaller in frame).  
+Después copiá el video a `C:\KCMundial2\assets\promo.mp4`.
 
-Rebuild after changing.
+No abras las dos apps a la vez: la cámara la usa una sola. Si la vieja está abierta, la nueva muestra el preview pero no puede sacar la foto en 4K.
 
-## Runtime folders
+(También compila desde macOS/Linux para verificar: `dotnet build KCMundial.sln -p:EnableWindowsTargeting=true`.)
 
-The app creates these next to the executable (or under the configured install root):
+## Qué genera cada foto
 
-- **raw/** – Raw captures (JPEG).  
-- **figuritas/** – Final figuritas at 591×827 (300 DPI equivalent).  
-- **figuritas_hd/** – HD figuritas at 1182×1654.  
-- **assets/** – Backgrounds and cascade (see above).  
+Todo queda en carpetas junto al `.exe`, con el mismo nombre de archivo (fecha_hora_código):
 
-**Log file:** `kcmundial.log` in the same folder as the .exe (e.g. `c:\KCMundial\publish\kcmundial.log`). The first line in the log writes the full path. Use it to see camera enumeration timing, which camera was selected, and any errors when opening the USB camera.
+| Carpeta | Tamaño | Para qué |
+|---|---|---|
+| `raw/` | resolución completa de la cámara (Brio vertical: 2160×4096) | original, sin marco |
+| `figuritas_hd/` | lado largo 3600 px (con marcos 2:3: 2400×3600) | máster con marco |
+| `figuritas/` | 1200×1800 (4×6" a 300 dpi) | se imprime en la DNP, se muestra y se comparte por QR |
+| `ampliaciones_20x30/` | 2362×3543 (20×30 cm a 300 dpi) | para mandar a ampliar |
 
-## Printing
+Todos los JPEG van marcados a 300 dpi.
 
-Printing is out of scope in the current build; the structure is ready to add a print service later (e.g. inject into the result/gallery flow).
+## Configuración (`kcmundial.settings.json`)
 
-## License
+Se crea junto al `.exe` la primera vez que se abre la app. Cambiá los valores y reiniciá la app:
 
-Use as required by your project.
+| Opción | Por defecto | Qué hace |
+|---|---|---|
+| `CameraRotation` | `90` | Grados (horario) para enderezar la cámara vertical. Si la imagen sale cabeza abajo, poné `270`. |
+| `MirrorPreview` | `true` | Preview en espejo (la foto final nunca sale espejada). |
+| `HighResCapture` | `true` | Foto en la resolución máxima de la cámara. Si falla, usa el cuadro del preview. |
+| `CountdownSeconds` | `3` | Cuenta regresiva. |
+| `ResultAutoReturnSeconds` | `25` | Segundos en la pantalla de resultado antes de volver solo al inicio. |
+| `AutoPrint` | `true` | Imprimir apenas se saca la foto. |
+| `PrinterName` | `""` | Nombre (o parte) de la impresora. Vacío = la primera que contenga "QW410". |
+| `PrintCopies` | `1` | Copias por foto. |
+| `UploadEnabled` | `true` | Subir la foto al servidor para el QR. Si no hay internet, el QR apunta a la red local. |
+
+## Marcos
+
+`assets/Fondo_1.png`, `Fondo_2.png`, `Fondo_3.png`: PNG con la ventana de la foto **transparente**.
+Recomendado **2400×3600 (2:3)**: coincide con el papel 4×6" y con la ampliación 20×30, sin recortes.
+Plantilla e instrucciones para Canva: [`plantillas/`](plantillas/COMO_HACER_LOS_MARCOS.md).
+La app toma la proporción del marco, así que marcos de otro tamaño también funcionan.
+
+## Segundo monitor
+
+Poné el video en `assets/promo.mp4` (también sirven `idle.mp4`, `video.mp4` o `.wmv`/`.mov`).
+Corre en loop, sin sonido, y se pausa mientras se muestra una foto.
+
+## Operador
+
+- Botón de engranaje (arriba a la derecha): elegir cámara, galería, cerrar la app.
+- Galería: ver, reimprimir y borrar fotos.
+- Log: `kcmundial.log` junto al `.exe` (cámara, formatos elegidos, tiempos de captura, impresión).
+
+## Estructura
+
+- **KCMundial.App** – WPF (vistas, view models, impresión, configuración)
+- **KCMundial.Camera** – Cámara con MediaCapture (preview liviano + foto a resolución máxima); DirectShow de respaldo
+- **KCMundial.Processing** – Composición con SkiaSharp y exportación de los cuatro archivos
+- **KCMundial.Vision** – Detección de caras (YuNet ONNX + Haar) para las indicaciones de posición
+- **KCMundial.Storage** / **KCMundial.Core** – Rutas, nombres, metadata, interfaces
+- **KCMundial.ShareServer** – Servidor HTTP local para el QR sin internet

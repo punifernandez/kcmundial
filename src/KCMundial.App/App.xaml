@@ -1,31 +1,32 @@
 <Application x:Class="KCMundial.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:KCMundial.App"
              xmlns:vm="clr-namespace:KCMundial.App.ViewModels"
              xmlns:views="clr-namespace:KCMundial.App.Views"
              xmlns:conv="clr-namespace:KCMundial.App.Converters"
-             Startup="Application_Startup">
+             Startup="Application_Startup"
+             ShutdownMode="OnMainWindowClose">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/AppTheme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
-        <conv:PositionToColorConverter x:Key="PositionColorConverter"/>
-        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
-        <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
-        <DataTemplate DataType="{x:Type vm:MainViewModel}">
-            <views:MainView/>
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:ResultViewModel}">
-            <views:ResultView/>
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:GalleryViewModel}">
-            <views:GalleryView/>
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:GalleryDetailViewModel}">
-            <views:GalleryDetailView/>
-        </DataTemplate>
+            <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+            <conv:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True"/>
+            <conv:InverseBoolConverter x:Key="InverseBool"/>
+            <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
+            <DataTemplate DataType="{x:Type vm:MainViewModel}">
+                <views:MainView/>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ResultViewModel}">
+                <views:ResultView/>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:GalleryViewModel}">
+                <views:GalleryView/>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:GalleryDetailViewModel}">
+                <views:GalleryDetailView/>
+            </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

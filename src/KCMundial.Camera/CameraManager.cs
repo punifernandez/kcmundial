@@ -84,7 +84,7 @@ public sealed class CameraManager : ICameraManager
     }
 
     [Obsolete("Use MediaCaptureCameraManager instead")]
-    public async Task StartPreviewAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken = default, bool preferPortraitFormats = false)
+    public async Task StartPreviewAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken = default)
     {
         // Legacy implementation - extract index from device name for backward compatibility
         // This should not be used - MediaCaptureCameraManager is the correct implementation
@@ -139,7 +139,7 @@ public sealed class CameraManager : ICameraManager
                 _currentCameraIndex = cameraIndex;
                 _lastOnFrame = onFrame;
                 _previewCts = cts;
-                _previewTask = RunPreviewLoopAsync(capture, onFrame, cts.Token);
+                _previewTask = Task.Run(() => RunPreviewLoopAsync(capture, onFrame, cts.Token));
             }
             _logger?.Info($"StartPreview: camera {cameraIndex} preview loop started");
 
@@ -157,7 +157,7 @@ public sealed class CameraManager : ICameraManager
     {
         _logger?.Info($"RunPreviewLoopAsync: started for camera");
         using var frame = new Mat();
-        var targetMs = (int)(1000.0 / 30);
+        using var bgra = new Mat();
         var consecutiveErrors = 0;
         const int maxConsecutiveErrors = 50;
         
@@ -203,22 +203,24 @@ public sealed class CameraManager : ICameraManager
                 consecutiveErrors = 0;
                 
                 if (token.IsCancellationRequested) break;
-                var w = frame.Width;
-                var h = frame.Height;
-                var step = (int)frame.Step();
-                var length = step * h;
-                var bytes = new byte[length];
-                Marshal.Copy(frame.Data, bytes, 0, length);
-                
-                // Update snapshot buffer (thread-safe)
+                // Read() bloquea hasta el próximo cuadro: no hace falta demorar el loop.
+                Cv2.CvtColor(frame, bgra, ColorConversionCodes.BGR2BGRA);
+                var w = bgra.Width;
+                var h = bgra.Height;
+                var length = w * h * 4;
                 lock (_snapshotLock)
                 {
-                    _latestSnapshot = bytes;
+                    if (_latestSnapshot == null || _latestSnapshot.Length != length)
+                        _latestSnapshot = new byte[length];
+                    if (bgra.IsContinuous())
+                        Marshal.Copy(bgra.Data, _latestSnapshot, 0, length);
+                    else
+                        for (var y = 0; y < h; y++)
+                            Marshal.Copy(bgra.Ptr(y), _latestSnapshot, y * w * 4, w * 4);
                     _latestWidth = w;
                     _latestHeight = h;
+                    onFrame(_latestSnapshot, w, h);
                 }
-                
-                onFrame(bytes, w, h);
             }
             catch (OperationCanceledException)
             {
@@ -244,8 +246,6 @@ public sealed class CameraManager : ICameraManager
                 continue;
             }
 
-            if (token.IsCancellationRequested) break;
-            await Task.Delay(targetMs, token).ConfigureAwait(false);
         }
         _logger?.Info("RunPreviewLoopAsync: exited");
     }
@@ -313,11 +313,9 @@ public sealed class CameraManager : ICameraManager
         _logger?.Info("StopPreview: stopped");
     }
 
-    public Task<CaptureResult?> CaptureStillAsync(CancellationToken cancellationToken = default)
+    /// <summary>DirectShow es solo respaldo: devuelve el último cuadro del preview (sin cambio a 4K).</summary>
+    public Task<CaptureResult?> CaptureStillAsync(bool highRes = true, CancellationToken cancellationToken = default)
     {
-        // Get latest snapshot without stopping preview
-        byte[]? snapshot;
-        int width, height;
         lock (_snapshotLock)
         {
             if (_latestSnapshot == null)
@@ -325,15 +323,9 @@ public sealed class CameraManager : ICameraManager
                 _logger?.Warn("CaptureStillAsync: no snapshot available");
                 return Task.FromResult<CaptureResult?>(null);
             }
-            // Create defensive copy
-            snapshot = new byte[_latestSnapshot.Length];
-            Array.Copy(_latestSnapshot, snapshot, _latestSnapshot.Length);
-            width = _latestWidth;
-            height = _latestHeight;
+            _logger?.Info($"CaptureStillAsync: returning preview frame {_latestWidth}x{_latestHeight}");
+            return Task.FromResult<CaptureResult?>(new CaptureResult { Bgra = (byte[])_latestSnapshot.Clone(), Width = _latestWidth, Height = _latestHeight });
         }
-        
-        _logger?.Info($"CaptureStillAsync: returning snapshot {width}x{height}");
-        return Task.FromResult<CaptureResult?>(new CaptureResult { Bgr = snapshot, Width = width, Height = height });
     }
 
     private void RaiseCameraError(string message)

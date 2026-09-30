@@ -8,6 +8,7 @@ using Windows.Graphics.Imaging;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
 using Windows.Media.Devices;
+using Windows.Media.MediaProperties;
 using Windows.Storage.Streams;
 
 namespace KCMundial.Camera;
@@ -27,17 +28,12 @@ public sealed class MediaCaptureCameraManager : ICameraManager
     private Action<byte[], int, int>? _lastOnFrame;
     private bool _disposed;
 
-    // Latest frame snapshot for capture
     private readonly object _snapshotLock = new();
-    private byte[]? _latestSnapshot;
-    private int _latestWidth;
-    private int _latestHeight;
-    
-    // Format management for preview vs capture
+
+    // Formatos del preview y de la foto
     private MediaFrameFormat? _previewFormat;
     private MediaFrameFormat? _maxCaptureFormat;
     private MediaFrameSource? _currentFrameSource;
-    private bool _force9_16;
 
     public MediaCaptureCameraManager(IAppLogger? logger = null)
     {
@@ -253,456 +249,293 @@ public sealed class MediaCaptureCameraManager : ICameraManager
         return list;
     }
 
-    public async Task StartPreviewAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken = default, bool preferPortraitFormats = false)
+    // ---------------------------------------------------------------------------------
+    // Preview + captura
+    //
+    // El preview corre en un formato liviano (≤1920×1080) y el reader le pide a Media Foundation
+    // los cuadros ya convertidos a BGRA (decodifica MJPG/NV12 por nosotros, sin conversiones en C#).
+    // Para la foto, la cámara pasa un instante a su formato más grande (Brio: 4K), toma un cuadro
+    // y vuelve al formato del preview.
+    // ---------------------------------------------------------------------------------
+
+    private static readonly HashSet<string> DecodableSubtypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        var requestedDisplayName = device.DisplayName;
-        var requestedStableKey = device.StableKey;
-        var requestedDeviceId = device.DeviceId;
-        var deviceIdPreview = requestedDeviceId.Length > 20 ? requestedDeviceId.Substring(0, 20) + "..." : requestedDeviceId;
-        _logger?.Info($"StartPreviewAsync: Requested camera = {requestedDisplayName} (StableKey={requestedStableKey}, DeviceId={deviceIdPreview})");
-        _logger?.Info($"StartPreviewAsync: Stopping current = {(_currentDevice != null ? _currentDevice.DisplayName + " (" + _currentDevice.StableKey + ")" : "none")}");
-        
-        // MUST await StopPreviewAsync to avoid race conditions
-        await StopPreviewAsync().ConfigureAwait(false);
-        
-        // Wait 250ms after stop to allow driver release
-        await Task.Delay(250).ConfigureAwait(false);
-        
-        _logger?.Info($"StartPreviewAsync: Opening by DeviceId (DisplayName={requestedDisplayName}, StableKey={requestedStableKey})");
-        _force9_16 = preferPortraitFormats;
+        "NV12", "YUY2", "MJPG", "RGB24", "RGB32", "ARGB32", "BGRA8", "BGR8"
+    };
+    private const int HighResSkipFrames = 2;
+    private static readonly TimeSpan HighResTimeout = TimeSpan.FromSeconds(4);
+
+    private readonly SemaphoreSlim _opLock = new(1, 1);
+    private volatile bool _suspendPreviewFrames;
+    private byte[]? _latestFrame;
+    private int _latestFrameWidth;
+    private int _latestFrameHeight;
+    private bool _canSetFormat;
+
+    public Task StartPreviewAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken = default)
+        => RunLockedAsync(() => StartPreviewCoreAsync(device, onFrame, cancellationToken));
+
+    public Task StopPreviewAsync() => RunLockedAsync(StopPreviewCoreAsync);
+
+    private async Task RunLockedAsync(Func<Task> action)
+    {
+        await _opLock.WaitAsync().ConfigureAwait(false);
+        try { await action().ConfigureAwait(false); }
+        finally { _opLock.Release(); }
+    }
+
+    private async Task StartPreviewCoreAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken)
+    {
+        _logger?.Info($"StartPreviewAsync: requested {device.DisplayName} (StableKey={device.StableKey})");
+        await StopPreviewCoreAsync().ConfigureAwait(false);
+        // Darle tiempo al driver USB a liberar la cámara anterior.
+        await Task.Delay(250, cancellationToken).ConfigureAwait(false);
 
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         MediaCapture? capture = null;
         MediaFrameReader? reader = null;
-        bool canSetFormat = true; // false if we fell back to SharedReadOnly
         try
         {
             var sw = Stopwatch.StartNew();
-            capture = new MediaCapture();
+            (capture, _canSetFormat) = await InitializeCaptureAsync(device.DeviceId).ConfigureAwait(false);
+            _logger?.Info($"StartPreviewAsync: MediaCapture initialized in {sw.ElapsedMilliseconds} ms (canSetFormat={_canSetFormat})");
 
-            // Open by DeviceId only (never by index)
-            var settingsExclusive = new MediaCaptureInitializationSettings
+            var source = SelectFrameSource(capture);
+            if (source == null)
             {
-                VideoDeviceId = device.DeviceId,
-                StreamingCaptureMode = StreamingCaptureMode.Video,
-                MemoryPreference = MediaCaptureMemoryPreference.Cpu,
-                SharingMode = MediaCaptureSharingMode.ExclusiveControl
-            };
-            try
-            {
-                await capture.InitializeAsync(settingsExclusive).AsTask().ConfigureAwait(false);
-                _logger?.Info("StartPreviewAsync: initialized with ExclusiveControl");
-            }
-            catch (Exception exInit)
-            {
-                _logger?.Warn($"StartPreviewAsync: ExclusiveControl failed ({exInit.Message}), trying SharedReadOnly");
-                capture.Dispose();
-                capture = new MediaCapture();
-                var settingsShared = new MediaCaptureInitializationSettings
-                {
-                    VideoDeviceId = device.DeviceId,
-                    StreamingCaptureMode = StreamingCaptureMode.Video,
-                    MemoryPreference = MediaCaptureMemoryPreference.Cpu,
-                    SharingMode = MediaCaptureSharingMode.SharedReadOnly
-                };
-                await capture.InitializeAsync(settingsShared).AsTask().ConfigureAwait(false);
-                canSetFormat = false;
-                _logger?.Info("StartPreviewAsync: initialized with SharedReadOnly (format change disabled)");
-            }
-
-            sw.Stop();
-            _logger?.Info($"StartPreviewAsync: MediaCapture initialized in {sw.ElapsedMilliseconds} ms");
-            
-            // Create frame reader for low-latency preview - try ALL frame sources to find best one
-            var sourceGroups = capture.FrameSources.Where(fs => fs.Value.Info.MediaStreamType == MediaStreamType.VideoPreview || fs.Value.Info.MediaStreamType == MediaStreamType.VideoRecord).ToList();
-            if (sourceGroups.Count == 0)
-            {
-                _logger?.Warn("StartPreviewAsync: no video frame source found");
                 capture.Dispose();
                 RaiseCameraError("No se encontró fuente de video en la cámara.");
                 return;
             }
 
-            // Find best frame source: prefer ones with uncompressed formats (NV12, YUY2, RGB) over compressed (H264, H264ES)
-            MediaFrameSource? bestFrameSource = null;
-            int bestFormatCount = 0;
-            
-            foreach (var kvp in sourceGroups)
-            {
-                var fs = kvp.Value;
-                var uncompressedFormats = fs.SupportedFormats.Where(f => 
-                    f.Subtype == "NV12" || f.Subtype == "YUY2" || f.Subtype == "RGB24" || 
-                    f.Subtype == "RGB32" || f.Subtype == "BGRA8" || f.Subtype == "BGR8").Count();
-                
-                if (uncompressedFormats > bestFormatCount)
-                {
-                    bestFormatCount = uncompressedFormats;
-                    bestFrameSource = fs;
-                }
-            }
-            
-            // If no source with uncompressed formats found, use first one
-            if (bestFrameSource == null)
-            {
-                bestFrameSource = sourceGroups[0].Value;
-                _logger?.Warn("StartPreviewAsync: no frame source with uncompressed formats found, using first available");
-            }
-            else
-            {
-                _logger?.Info($"StartPreviewAsync: selected frame source with {bestFormatCount} uncompressed formats");
-            }
-            
-            var frameSource = bestFrameSource;
-            
-            // Log all available formats for debugging
-            _logger?.Info($"StartPreviewAsync: available formats count={frameSource.SupportedFormats.Count}");
-            foreach (var fmt in frameSource.SupportedFormats.Take(10))
-            {
-                var vf = fmt.VideoFormat;
-                _logger?.Info($"StartPreviewAsync:   format {vf.Width}x{vf.Height} subtype={fmt.Subtype}");
-            }
-            
-            // Get all formats, filter out weird formats (square, too small, etc.)
-            var supportedFormats = frameSource.SupportedFormats.ToList();
-            
-            // Filter: reasonable formats (not square, not too small, reasonable aspect ratio)
-            bool IsReasonableFormat(MediaFrameFormat f)
-            {
-                var v = f.VideoFormat;
-                if (v.Width < 320 || v.Height < 240) return false; // Too small
-                var ar = v.Width > 0 ? (double)v.Width / v.Height : 0;
-                if (preferPortraitFormats)
-                {
-                    if (ar < 0.35 || ar > 2.5) return false; // Permitir 9:16 (portrait) y landscape
-                }
-                else
-                {
-                    if (ar < 1.0 || ar > 2.5) return false; // Solo landscape
-                }
-                if (Math.Abs(ar - 1.0) < 0.1) return false; // Rechazar cuadrados
-                if (f.Subtype == "L8") return false;
-                return true;
-            }
-            
-            // Prefer uncompressed formats (NV12, YUY2, RGB) over compressed (H264, H264ES)
-            bool IsUncompressedFormat(MediaFrameFormat f)
-            {
-                return f.Subtype == "NV12" || f.Subtype == "YUY2" || f.Subtype == "RGB24" || 
-                       f.Subtype == "RGB32" || f.Subtype == "BGRA8" || f.Subtype == "BGR8";
-            }
-            
-            var reasonableFormats = supportedFormats.Where(IsReasonableFormat).ToList();
-            var preferredFormats = reasonableFormats
-                .Where(f => f.VideoFormat.Width >= 640 && f.VideoFormat.Height >= 480)
-                .ToList();
-            
-            if (preferredFormats.Count == 0)
-            {
-                _logger?.Warn("StartPreviewAsync: no formats >= 640x480, using reasonable formats");
-                preferredFormats = reasonableFormats;
-            }
-            
-            if (preferredFormats.Count == 0)
-            {
-                _logger?.Warn("StartPreviewAsync: no reasonable formats found, using all formats");
-                preferredFormats = supportedFormats;
-            }
+            var formats = source.SupportedFormats.Where(IsUsableFormat).ToList();
+            foreach (var f in formats.OrderByDescending(Pixels).Take(12))
+                _logger?.Info($"StartPreviewAsync:   format {Describe(f)}");
 
-            // Prioritize MAXIMUM resolution (width * height), prefer 16:9 o 9:16 según orientación
-            double AspectRatio(MediaFrameFormat f)
-            {
-                var v = f.VideoFormat;
-                return v.Width > 0 ? (double)v.Width / v.Height : 0;
-            }
-            bool Is16_9(MediaFrameFormat f)
-            {
-                var ar = AspectRatio(f);
-                return ar >= 1.6 && ar <= 1.85;
-            }
-            const double AR_9_16 = 9.0 / 16.0; // 0.5625
-            bool Is9_16(MediaFrameFormat f)
-            {
-                var ar = AspectRatio(f);
-                return ar >= AR_9_16 - 0.1 && ar <= AR_9_16 + 0.1;
-            }
-            
-            // PREVIEW: landscape max 1920x1080 (16:9); portrait max 1080x1920 (9:16)
-            var previewFormats = preferPortraitFormats
-                ? preferredFormats.Where(f => f.VideoFormat.Width <= 1080 && f.VideoFormat.Height <= 1920).ToList()
-                : preferredFormats.Where(f => f.VideoFormat.Width <= 1920 && f.VideoFormat.Height <= 1080).ToList();
-            
-            if (previewFormats.Count == 0)
-            {
-                _logger?.Warn(preferPortraitFormats ? "StartPreviewAsync: no formats <= 1080x1920" : "StartPreviewAsync: no formats <= 1920x1080");
-                previewFormats = preferredFormats;
-            }
-            
-            // Ordenar: sin comprimir primero, luego por resolución, luego preferir 9:16 (portrait) o 16:9 (landscape)
-            var preferredFormat = previewFormats
-                .OrderBy(f => IsUncompressedFormat(f) ? 0 : 1)
-                .ThenByDescending(f => f.VideoFormat.Width * f.VideoFormat.Height)
-                .ThenBy(f => preferPortraitFormats ? (Is9_16(f) ? 0 : 1) : (Is16_9(f) ? 0 : 1))
-                .ThenBy(f => preferPortraitFormats ? Math.Abs(AspectRatio(f) - AR_9_16) : Math.Abs(AspectRatio(f) - 16.0 / 9.0))
-                .FirstOrDefault() ?? frameSource.CurrentFormat;
-            
-            // Store maximum resolution format for capture
-            var maxCaptureFormat = preferredFormats
-                .Where(IsUncompressedFormat)
-                .OrderByDescending(f => f.VideoFormat.Width * f.VideoFormat.Height)
-                .FirstOrDefault();
-            
-            // Store formats for later use
-            lock (_lock)
-            {
-                _previewFormat = preferredFormat;
-                _maxCaptureFormat = maxCaptureFormat;
-                _currentFrameSource = bestFrameSource;
-            }
-            
-            var totalPixels = preferredFormat.VideoFormat.Width * preferredFormat.VideoFormat.Height;
-            _logger?.Info($"StartPreviewAsync: selected PREVIEW format {preferredFormat.VideoFormat.Width}x{preferredFormat.VideoFormat.Height} ({totalPixels:N0} pixels)");
-            if (maxCaptureFormat != null)
-            {
-                var maxPixels = maxCaptureFormat.VideoFormat.Width * maxCaptureFormat.VideoFormat.Height;
-                _logger?.Info($"StartPreviewAsync: maximum CAPTURE format available: {maxCaptureFormat.VideoFormat.Width}x{maxCaptureFormat.VideoFormat.Height} ({maxPixels:N0} pixels)");
-            }
+            var previewFormat = SelectPreviewFormat(formats) ?? source.CurrentFormat;
+            var maxFormat = SelectMaxFormat(formats);
+            _logger?.Info($"StartPreviewAsync: preview={Describe(previewFormat)}, still={(maxFormat != null ? Describe(maxFormat) : "n/a")}");
 
-            if (canSetFormat)
+            if (_canSetFormat)
             {
-                try
+                try { await source.SetFormatAsync(previewFormat).AsTask().ConfigureAwait(false); }
+                catch (Exception ex)
                 {
-                    await frameSource.SetFormatAsync(preferredFormat).AsTask().ConfigureAwait(false);
-                    _logger?.Info($"StartPreviewAsync: set format {preferredFormat.VideoFormat.Width}x{preferredFormat.VideoFormat.Height}");
-                }
-                catch (Exception exFormat)
-                {
-                    _logger?.Warn($"StartPreviewAsync: SetFormatAsync failed ({exFormat.Message}), using current format");
-                    preferredFormat = frameSource.CurrentFormat;
+                    _logger?.Warn($"StartPreviewAsync: SetFormatAsync failed ({ex.Message}), using current format");
+                    previewFormat = source.CurrentFormat;
                 }
             }
             else
             {
-                preferredFormat = frameSource.CurrentFormat;
-                _logger?.Info($"StartPreviewAsync: using current format (SharedReadOnly) {preferredFormat.VideoFormat.Width}x{preferredFormat.VideoFormat.Height}");
+                previewFormat = source.CurrentFormat;
             }
 
-            reader = await capture.CreateFrameReaderAsync(bestFrameSource).AsTask().ConfigureAwait(false);
+            reader = await CreateBgraReaderAsync(capture, source).ConfigureAwait(false);
             reader.FrameArrived += OnFrameArrived;
-            var result = await reader.StartAsync().AsTask().ConfigureAwait(false);
-            
-            if (result != MediaFrameReaderStartStatus.Success)
-            {
-                _logger?.Warn($"StartPreviewAsync: frame reader start failed with status {result}");
-                reader.Dispose();
-                capture.Dispose();
-                RaiseCameraError("No se pudo iniciar la lectura de frames.");
-                return;
-            }
 
-            // Wait a bit for frames to start arriving (some cameras need initialization time)
-            await Task.Delay(100).ConfigureAwait(false);
-            
             lock (_lock)
             {
                 _mediaCapture = capture;
                 _frameReader = reader;
+                _currentFrameSource = source;
+                _previewFormat = previewFormat;
+                _maxCaptureFormat = maxFormat;
                 _currentDevice = device;
                 _lastOnFrame = onFrame;
                 _previewCts = cts;
-                _previewTask = Task.CompletedTask; // Frame processing happens in event handler
+                _previewTask = Task.CompletedTask;
+            }
+
+            var status = await reader.StartAsync().AsTask().ConfigureAwait(false);
+            if (status != MediaFrameReaderStartStatus.Success)
+            {
+                _logger?.Warn($"StartPreviewAsync: frame reader start failed with status {status}");
+                await StopPreviewCoreAsync().ConfigureAwait(false);
+                RaiseCameraError("No se pudo iniciar la lectura de la cámara.");
+                return;
             }
             _frameCount = 0;
             _lastFrameLogTime = DateTime.MinValue;
-            _logger?.Info($"StartPreviewAsync: Active camera = {device.DisplayName} (StableKey={device.StableKey}, DeviceId ok)");
-
-            await Task.CompletedTask.ConfigureAwait(false);
+            _logger?.Info($"StartPreviewAsync: active camera = {device.DisplayName}");
         }
         catch (Exception ex)
         {
-            _logger?.Error($"StartPreviewAsync: camera \"{device.DisplayName}\" ({device.StableKey}) exception", ex);
+            _logger?.Error($"StartPreviewAsync: camera \"{device.DisplayName}\" exception", ex);
+            lock (_lock)
+            {
+                if (ReferenceEquals(_mediaCapture, capture)) { _mediaCapture = null; _frameReader = null; _previewTask = null; }
+            }
+            if (reader != null) reader.FrameArrived -= OnFrameArrived;
             reader?.Dispose();
             capture?.Dispose();
             RaiseCameraError($"Error al iniciar cámara: {ex.Message}");
         }
     }
 
-    private int _frameCount = 0;
+    private async Task<(MediaCapture Capture, bool CanSetFormat)> InitializeCaptureAsync(string deviceId)
+    {
+        var capture = new MediaCapture();
+        try
+        {
+            await capture.InitializeAsync(new MediaCaptureInitializationSettings
+            {
+                VideoDeviceId = deviceId,
+                StreamingCaptureMode = StreamingCaptureMode.Video,
+                MemoryPreference = MediaCaptureMemoryPreference.Cpu,
+                SharingMode = MediaCaptureSharingMode.ExclusiveControl
+            }).AsTask().ConfigureAwait(false);
+            return (capture, true);
+        }
+        catch (Exception ex)
+        {
+            // Otra app tiene la cámara: se puede ver, pero no cambiar de formato (sin foto 4K).
+            _logger?.Warn($"InitializeCapture: ExclusiveControl failed ({ex.Message}), trying SharedReadOnly");
+            capture.Dispose();
+            capture = new MediaCapture();
+            await capture.InitializeAsync(new MediaCaptureInitializationSettings
+            {
+                VideoDeviceId = deviceId,
+                StreamingCaptureMode = StreamingCaptureMode.Video,
+                MemoryPreference = MediaCaptureMemoryPreference.Cpu,
+                SharingMode = MediaCaptureSharingMode.SharedReadOnly
+            }).AsTask().ConfigureAwait(false);
+            return (capture, false);
+        }
+    }
+
+    private static async Task<MediaFrameReader> CreateBgraReaderAsync(MediaCapture capture, MediaFrameSource source)
+    {
+        var reader = await capture.CreateFrameReaderAsync(source, MediaEncodingSubtypes.Bgra8).AsTask().ConfigureAwait(false);
+        reader.AcquisitionMode = MediaFrameReaderAcquisitionMode.Realtime;
+        return reader;
+    }
+
+    /// <summary>Fuente de color con el formato más grande (preferir VideoPreview/Record sobre otras).</summary>
+    private MediaFrameSource? SelectFrameSource(MediaCapture capture)
+    {
+        return capture.FrameSources.Values
+            .Where(fs => fs.Info.SourceKind == MediaFrameSourceKind.Color &&
+                         (fs.Info.MediaStreamType == MediaStreamType.VideoPreview || fs.Info.MediaStreamType == MediaStreamType.VideoRecord))
+            .OrderByDescending(fs => fs.SupportedFormats.Where(IsUsableFormat).Select(Pixels).DefaultIfEmpty(0).Max())
+            .ThenBy(fs => fs.Info.MediaStreamType == MediaStreamType.VideoRecord ? 0 : 1)
+            .FirstOrDefault();
+    }
+
+    private static bool IsUsableFormat(MediaFrameFormat f)
+    {
+        var v = f.VideoFormat;
+        if (v == null || v.Width < 320 || v.Height < 240) return false;
+        if (!DecodableSubtypes.Contains(f.Subtype)) return false; // descarta H264/HEVC/L8 etc.
+        return Fps(f) >= 5;
+    }
+
+    /// <summary>Preview: el más grande que entre en 1920×1080 a ≥24 fps; preferir formatos sin comprimir.</summary>
+    private static MediaFrameFormat? SelectPreviewFormat(List<MediaFrameFormat> formats)
+    {
+        static bool FitsPreview(MediaFrameFormat f) =>
+            Math.Max(f.VideoFormat.Width, f.VideoFormat.Height) <= 1920 && Math.Min(f.VideoFormat.Width, f.VideoFormat.Height) <= 1080;
+
+        return formats.Where(f => FitsPreview(f) && Fps(f) >= 24)
+                   .OrderByDescending(Pixels)
+                   .ThenBy(f => f.Subtype.Equals("MJPG", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                   .ThenByDescending(Fps)
+                   .FirstOrDefault()
+               ?? formats.Where(FitsPreview).OrderByDescending(Pixels).ThenByDescending(Fps).FirstOrDefault();
+    }
+
+    /// <summary>Foto: el formato con más píxeles (cualquier fps).</summary>
+    private static MediaFrameFormat? SelectMaxFormat(List<MediaFrameFormat> formats) =>
+        formats.OrderByDescending(Pixels).ThenByDescending(Fps).FirstOrDefault();
+
+    private static long Pixels(MediaFrameFormat f) => (long)f.VideoFormat.Width * f.VideoFormat.Height;
+    private static double Fps(MediaFrameFormat f) => f.FrameRate is { Denominator: > 0 } r ? (double)r.Numerator / r.Denominator : 0;
+    private static string Describe(MediaFrameFormat f) => $"{f.VideoFormat.Width}x{f.VideoFormat.Height} {f.Subtype} {Fps(f):0.#}fps";
+
+    private int _frameCount;
     private DateTime _lastFrameLogTime = DateTime.MinValue;
 
     private void OnFrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
     {
-        if (_disposed || _previewCts?.Token.IsCancellationRequested == true)
+        if (_disposed || _suspendPreviewFrames || _previewCts?.Token.IsCancellationRequested == true)
             return;
-
         try
         {
-            var frame = sender.TryAcquireLatestFrame();
-            if (frame == null)
-                return;
-            
-            // Log frame arrival every 5 seconds for debugging
+            using var frame = sender.TryAcquireLatestFrame();
+            var bitmap = frame?.VideoMediaFrame?.SoftwareBitmap;
+            if (bitmap == null) return;
+
             _frameCount++;
-            var now = DateTime.Now;
-            if ((now - _lastFrameLogTime).TotalSeconds >= 5)
+            var now = DateTime.UtcNow;
+            if ((now - _lastFrameLogTime).TotalSeconds >= 30)
             {
-                var activeStableKey = _currentDevice?.StableKey ?? "?";
-                _logger?.Info($"Frames arriving from {activeStableKey} (frame #{_frameCount})");
+                _logger?.Info($"Preview: {bitmap.PixelWidth}x{bitmap.PixelHeight}, frame #{_frameCount}");
                 _lastFrameLogTime = now;
             }
 
-            using (frame)
+            var callback = _lastOnFrame;
+            lock (_snapshotLock)
             {
-                var videoFrame = frame.VideoMediaFrame;
-                if (videoFrame == null)
-                    return;
-
-                var softwareBitmap = videoFrame.SoftwareBitmap;
-                if (softwareBitmap == null)
-                {
-                    // Try Direct3DSurface if SoftwareBitmap is null (some cameras use D3D)
-                    var d3dSurface = videoFrame.Direct3DSurface;
-                    if (d3dSurface != null)
-                    {
-                        _logger?.Warn("OnFrameArrived: received Direct3DSurface, SoftwareBitmap conversion needed");
-                        // For now, skip D3D frames - they need special handling
-                        return;
-                    }
-                    return;
-                }
-
-                // Convert SoftwareBitmap to BGR byte array
-                var width = softwareBitmap.PixelWidth;
-                var height = softwareBitmap.PixelHeight;
-                
-                if (width <= 0 || height <= 0)
-                    return;
-                
-                // Ensure BGRA8 format - convert from any format
-                SoftwareBitmap? convertedBitmap = null;
-                SoftwareBitmap? bitmapToUse = softwareBitmap;
-                byte[]? bgrData = null;
-                
-                try
-                {
-                    if (softwareBitmap.BitmapPixelFormat != Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8)
-                    {
-                        convertedBitmap = SoftwareBitmap.Convert(softwareBitmap, Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8);
-                        bitmapToUse = convertedBitmap;
-                    }
-
-                    var pixelData = new byte[width * height * 4];
-                    bitmapToUse.CopyToBuffer(pixelData.AsBuffer());
-
-                    // Convert BGRA to BGR
-                    bgrData = new byte[width * height * 3];
-                    for (int i = 0; i < width * height; i++)
-                    {
-                        bgrData[i * 3] = pixelData[i * 4];         // B
-                        bgrData[i * 3 + 1] = pixelData[i * 4 + 1]; // G
-                        bgrData[i * 3 + 2] = pixelData[i * 4 + 2]; // R
-                    }
-
-                }
-                catch (Exception exConvert)
-                {
-                    _logger?.Warn($"OnFrameArrived: bitmap conversion exception: {exConvert.Message}");
-                    convertedBitmap?.Dispose();
-                    return;
-                }
-                
-                if (bgrData == null)
-                    return;
-
-                // Forzar 9:16: si la cámara da 16:9 (o cualquier otra relación), recortar al centro a 9:16
-                if (_force9_16)
-                {
-                    const double AR_9_16 = 9.0 / 16.0;
-                    double ar = (double)width / height;
-                    if (Math.Abs(ar - AR_9_16) > 0.08)
-                    {
-                        CropBgrTo9_16(bgrData, width, height, out bgrData, out width, out height);
-                    }
-                }
-
-                // Update snapshot buffer (thread-safe)
-                lock (_snapshotLock)
-                {
-                    _latestSnapshot = bgrData;
-                    _latestWidth = width;
-                    _latestHeight = height;
-                }
-
-                // Call frame callback on background thread (clone data to avoid disposal issues)
-                var callback = _lastOnFrame;
-                if (callback != null && _previewCts?.Token.IsCancellationRequested != true)
-                {
-                    var clonedData = new byte[bgrData.Length];
-                    Array.Copy(bgrData, clonedData, bgrData.Length);
-                    Task.Run(() =>
-                    {
-                        try
-                        {
-                            callback(clonedData, width, height);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger?.Warn($"OnFrameArrived: callback exception: {ex.Message}");
-                        }
-                    }, _previewCts?.Token ?? CancellationToken.None);
-                }
+                if (!CopyBgra(bitmap, ref _latestFrame, out var w, out var h)) return;
+                _latestFrameWidth = w;
+                _latestFrameHeight = h;
+                callback?.Invoke(_latestFrame!, w, h);
             }
         }
         catch (Exception ex)
         {
-            _logger?.Warn($"OnFrameArrived: exception: {ex.Message}");
+            _logger?.Warn($"OnFrameArrived: {ex.Message}");
         }
     }
 
-    /// <summary>Recorta el frame BGR al centro con relación 9:16. Si ya es 9:16 no hace nada.</summary>
-    private static void CropBgrTo9_16(byte[] bgrIn, int w, int h, out byte[] bgrOut, out int outW, out int outH)
+    /// <summary>Copia un SoftwareBitmap BGRA a un array empaquetado (stride = ancho × 4), reusando el array si alcanza.</summary>
+    private static bool CopyBgra(SoftwareBitmap bitmap, ref byte[]? target, out int width, out int height)
     {
-        const double AR_9_16 = 9.0 / 16.0;
-        double ar = (double)w / h;
-        int startX = 0, startY = 0;
-        if (ar > AR_9_16)
+        width = bitmap.PixelWidth;
+        height = bitmap.PixelHeight;
+        if (width <= 0 || height <= 0) return false;
+
+        SoftwareBitmap? converted = null;
+        try
         {
-            outW = (int)Math.Round(h * AR_9_16);
-            outH = h;
-            startX = (w - outW) / 2;
+            if (bitmap.BitmapPixelFormat != BitmapPixelFormat.Bgra8)
+                bitmap = converted = SoftwareBitmap.Convert(bitmap, BitmapPixelFormat.Bgra8);
+
+            var packed = width * 4;
+            var size = packed * height;
+            if (target == null || target.Length != size) target = new byte[size];
+
+            int stride;
+            using (var locked = bitmap.LockBuffer(BitmapBufferAccessMode.Read))
+                stride = locked.GetPlaneDescription(0).Stride;
+
+            if (stride == packed)
+            {
+                bitmap.CopyToBuffer(target.AsBuffer());
+            }
+            else
+            {
+                var padded = new byte[stride * height];
+                bitmap.CopyToBuffer(padded.AsBuffer());
+                for (var y = 0; y < height; y++)
+                    System.Buffer.BlockCopy(padded, y * stride, target, y * packed, packed);
+            }
+            return true;
         }
-        else
+        finally
         {
-            outW = w;
-            outH = (int)Math.Round(w / AR_9_16);
-            startY = (h - outH) / 2;
-        }
-        bgrOut = new byte[outW * outH * 3];
-        int inStride = w * 3;
-        int outStride = outW * 3;
-        for (int y = 0; y < outH; y++)
-        {
-            int srcOffset = ((startY + y) * inStride) + (startX * 3);
-            int dstOffset = y * outStride;
-            System.Buffer.BlockCopy(bgrIn, srcOffset, bgrOut, dstOffset, outStride);
+            converted?.Dispose();
         }
     }
 
-    private const int StopPreviewTimeoutMs = 500;
-
-    public async Task StopPreviewAsync()
+    private async Task StopPreviewCoreAsync()
     {
-        Task? toWait = null;
-        MediaFrameReader? readerToStop = null;
-        MediaCapture? captureToDispose = null;
+        MediaFrameReader? reader;
+        MediaCapture? capture;
         lock (_lock)
         {
-            if (_previewCts != null)
-            {
-                try { _previewCts.Cancel(); } catch { /* ignore */ }
-            }
-            toWait = _previewTask;
-            readerToStop = _frameReader;
-            captureToDispose = _mediaCapture;
+            try { _previewCts?.Cancel(); } catch { /* ignore */ }
+            reader = _frameReader;
+            capture = _mediaCapture;
             _previewTask = null;
             _previewCts = null;
             _frameReader = null;
@@ -713,99 +546,186 @@ public sealed class MediaCaptureCameraManager : ICameraManager
             _maxCaptureFormat = null;
             _currentFrameSource = null;
         }
-        
-        // Stop frame reader first
-        if (readerToStop != null)
+
+        if (reader != null)
         {
             try
             {
-                _logger?.Info("StopPreviewAsync: stopping frame reader");
-                readerToStop.FrameArrived -= OnFrameArrived;
-                await readerToStop.StopAsync().AsTask().ConfigureAwait(false);
-                readerToStop.Dispose();
+                reader.FrameArrived -= OnFrameArrived;
+                await reader.StopAsync().AsTask().ConfigureAwait(false);
             }
-            catch (Exception ex) { _logger?.Warn($"StopPreviewAsync: frame reader stop exception: {ex.Message}"); }
+            catch (Exception ex) { _logger?.Warn($"StopPreview: reader stop: {ex.Message}"); }
+            reader.Dispose();
         }
-        
-        // Wait for any pending operations (with timeout)
-        if (toWait != null)
+        if (capture != null)
         {
-            try
-            {
-                var completed = await Task.WhenAny(toWait, Task.Delay(StopPreviewTimeoutMs)).ConfigureAwait(false);
-                if (completed != toWait)
-                    _logger?.Info($"StopPreviewAsync: previous operations did not complete in {StopPreviewTimeoutMs} ms, continuing anyway");
-                else
-                    _logger?.Info("StopPreviewAsync: previous operations completed cleanly");
-            }
-            catch (OperationCanceledException) { _logger?.Info("StopPreviewAsync: operations cancelled"); }
-            catch (Exception ex) { _logger?.Info($"StopPreviewAsync: wait ended: {ex.Message}"); }
+            try { capture.Dispose(); }
+            catch (Exception ex) { _logger?.Warn($"StopPreview: MediaCapture dispose: {ex.Message}"); }
         }
-        
-        // Dispose MediaCapture AFTER reader stops
-        if (captureToDispose != null)
-        {
-            try
-            {
-                _logger?.Info("StopPreviewAsync: disposing MediaCapture");
-                captureToDispose.Dispose();
-            }
-            catch (Exception ex) { _logger?.Warn($"StopPreviewAsync: MediaCapture dispose exception: {ex.Message}"); }
-        }
-        
-        // Clear snapshot
         lock (_snapshotLock)
         {
-            _latestSnapshot = null;
-            _latestWidth = 0;
-            _latestHeight = 0;
+            _latestFrame = null;
+            _latestFrameWidth = 0;
+            _latestFrameHeight = 0;
         }
-        
-        _logger?.Info("StopPreviewAsync: stopped");
+        if (reader != null || capture != null)
+            _logger?.Info("StopPreview: stopped");
     }
 
-    public Task<CaptureResult?> CaptureStillAsync(CancellationToken cancellationToken = default)
+    public async Task<CaptureResult?> CaptureStillAsync(bool highRes = true, CancellationToken cancellationToken = default)
     {
-        // Use preview snapshot - this avoids breaking preview state and allows camera switching to work normally
-        // The preview is already running at reasonable resolution (max 1920x1080) which is good quality
-        byte[]? snapshot;
-        int width, height;
-        lock (_snapshotLock)
+        await _opLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            if (_latestSnapshot == null)
+            CaptureResult? result = null;
+            if (highRes)
             {
-                _logger?.Warn("CaptureStillAsync: no snapshot available");
-                return Task.FromResult<CaptureResult?>(null);
+                try { result = await CaptureHighResCoreAsync(cancellationToken).ConfigureAwait(false); }
+                catch (Exception ex) { _logger?.Error("CaptureStill: high-res capture failed, using preview frame", ex); }
             }
-            snapshot = new byte[_latestSnapshot.Length];
-            Array.Copy(_latestSnapshot, snapshot, _latestSnapshot.Length);
-            width = _latestWidth;
-            height = _latestHeight;
+            return result ?? SnapshotPreviewFrame();
         }
-        _logger?.Info($"CaptureStillAsync: returning preview snapshot {width}x{height}");
-        return Task.FromResult<CaptureResult?>(new CaptureResult { Bgr = snapshot, Width = width, Height = height });
+        finally
+        {
+            _opLock.Release();
+        }
     }
 
+    private CaptureResult? SnapshotPreviewFrame()
+    {
+        lock (_snapshotLock)
+        {
+            if (_latestFrame == null)
+            {
+                _logger?.Warn("CaptureStill: no preview frame available");
+                return null;
+            }
+            _logger?.Info($"CaptureStill: using preview frame {_latestFrameWidth}x{_latestFrameHeight}");
+            return new CaptureResult { Bgra = (byte[])_latestFrame.Clone(), Width = _latestFrameWidth, Height = _latestFrameHeight };
+        }
+    }
+
+    private async Task<CaptureResult?> CaptureHighResCoreAsync(CancellationToken cancellationToken)
+    {
+        MediaCapture? capture;
+        MediaFrameReader? previewReader;
+        MediaFrameSource? source;
+        MediaFrameFormat? previewFormat, maxFormat;
+        lock (_lock)
+        {
+            capture = _mediaCapture;
+            previewReader = _frameReader;
+            source = _currentFrameSource;
+            previewFormat = _previewFormat;
+            maxFormat = _maxCaptureFormat;
+        }
+        if (capture == null || previewReader == null || source == null || previewFormat == null || maxFormat == null)
+            return null;
+        if (!_canSetFormat || Pixels(maxFormat) <= Pixels(previewFormat))
+        {
+            _logger?.Info("CaptureStill: high-res not available (shared mode or preview already at max)");
+            return null;
+        }
+
+        var sw = Stopwatch.StartNew();
+        _suspendPreviewFrames = true;
+        CaptureResult? result = null;
+        try
+        {
+            await previewReader.StopAsync().AsTask().ConfigureAwait(false);
+            await source.SetFormatAsync(maxFormat).AsTask().ConfigureAwait(false);
+            var switchMs = sw.ElapsedMilliseconds;
+
+            using var stillReader = await CreateBgraReaderAsync(capture, source).ConfigureAwait(false);
+            var tcs = new TaskCompletionSource<CaptureResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var seen = 0;
+            stillReader.FrameArrived += (s, _) =>
+            {
+                try
+                {
+                    using var frame = s.TryAcquireLatestFrame();
+                    var bitmap = frame?.VideoMediaFrame?.SoftwareBitmap;
+                    // Los primeros cuadros después de cambiar de formato pueden venir mal expuestos.
+                    if (bitmap == null || Interlocked.Increment(ref seen) <= HighResSkipFrames || tcs.Task.IsCompleted) return;
+                    byte[]? data = null;
+                    if (CopyBgra(bitmap, ref data, out var w, out var h))
+                        tcs.TrySetResult(new CaptureResult { Bgra = data!, Width = w, Height = h, IsHighRes = true });
+                }
+                catch (Exception ex) { tcs.TrySetException(ex); }
+            };
+
+            var status = await stillReader.StartAsync().AsTask().ConfigureAwait(false);
+            if (status == MediaFrameReaderStartStatus.Success)
+            {
+                var winner = await Task.WhenAny(tcs.Task, Task.Delay(HighResTimeout, cancellationToken)).ConfigureAwait(false);
+                if (winner == tcs.Task) result = await tcs.Task.ConfigureAwait(false);
+                else _logger?.Warn("CaptureStill: timed out waiting for high-res frame");
+            }
+            else
+            {
+                _logger?.Warn($"CaptureStill: still reader start failed ({status})");
+            }
+            await stillReader.StopAsync().AsTask().ConfigureAwait(false);
+            _logger?.Info($"CaptureStill: high-res {(result != null ? $"{result.Width}x{result.Height}" : "failed")}, format switch {switchMs} ms, total {sw.ElapsedMilliseconds} ms");
+        }
+        finally
+        {
+            await RestorePreviewAsync(capture, source, previewFormat).ConfigureAwait(false);
+            _suspendPreviewFrames = false;
+        }
+        return result;
+    }
+
+    /// <summary>Vuelve al formato del preview con un reader nuevo. Si falla, reinicia la cámara completa.</summary>
+    private async Task RestorePreviewAsync(MediaCapture capture, MediaFrameSource source, MediaFrameFormat previewFormat)
+    {
+        try
+        {
+            await source.SetFormatAsync(previewFormat).AsTask().ConfigureAwait(false);
+            var reader = await CreateBgraReaderAsync(capture, source).ConfigureAwait(false);
+            reader.FrameArrived += OnFrameArrived;
+            MediaFrameReader? old;
+            lock (_lock)
+            {
+                old = _frameReader;
+                _frameReader = reader;
+            }
+            if (old != null)
+            {
+                old.FrameArrived -= OnFrameArrived;
+                old.Dispose();
+            }
+            var status = await reader.StartAsync().AsTask().ConfigureAwait(false);
+            if (status != MediaFrameReaderStartStatus.Success)
+                throw new InvalidOperationException($"preview reader restart: {status}");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("CaptureStill: could not restore preview, restarting camera", ex);
+            CameraDevice? device;
+            Action<byte[], int, int>? onFrame;
+            lock (_lock)
+            {
+                device = _currentDevice;
+                onFrame = _lastOnFrame;
+            }
+            if (device != null && onFrame != null)
+                await StartPreviewCoreAsync(device, onFrame, CancellationToken.None).ConfigureAwait(false);
+        }
+    }
 
     private bool IsGenericName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return true;
-            
+
         var lower = name.ToLowerInvariant();
-        
-        // Check for generic patterns
         if (lower == "camera" || lower == "cámara" || lower == "unknown camera" || lower == "cámara desconocida")
             return true;
-            
-        // Check for numbered generic names (e.g., "Camera 0", "Cámara 0", "Camera 1")
         if (Regex.IsMatch(lower, @"^(camera|cámara)\s*\d+$"))
             return true;
-            
-        // Check for generic USB video device names
         if (lower.Contains("usb video device") || lower.Contains("usb2.0 camera") || lower.Contains("usb camera"))
             return true;
-            
         return false;
     }
 
@@ -816,6 +736,7 @@ public sealed class MediaCaptureCameraManager : ICameraManager
 
     public void Dispose()
     {
+        if (_disposed) return;
         _disposed = true;
         StopPreviewAsync().GetAwaiter().GetResult();
     }

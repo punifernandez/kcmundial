@@ -3,55 +3,97 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             mc:Ignorable="d" d:DesignHeight="1080" d:DesignWidth="600">
-    <Grid Background="{StaticResource BgPrimaryBrush}">
+             mc:Ignorable="d" d:DesignHeight="1920" d:DesignWidth="1080">
+    <UserControl.Resources>
+        <Style x:Key="SelectToggle" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="box" Width="44" Height="44" CornerRadius="22" Background="#9906132A" BorderBrush="White" BorderThickness="2">
+                            <Path x:Name="mark" Data="M4,12 L10,18 L20,6" Stroke="{StaticResource NavyDeepBrush}" StrokeThickness="3.5"
+                                  Stretch="Uniform" Margin="10" Visibility="Collapsed"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="box" Property="Background" Value="{StaticResource GoldBrush}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource GoldBrush}"/>
+                                <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource AppBackgroundBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="{StaticResource BgSecondaryBrush}" Padding="16,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="Volver" Command="{Binding BackCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
-                <Button Content="Deseleccionar todo" Command="{Binding DeselectAllCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
-                <Button Content="Borrar selección" Command="{Binding DeleteSelectionCommand}" Style="{StaticResource DangerButton}"/>
+        <Grid Grid.Row="0" Margin="40,36,40,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Style="{StaticResource RoundIconButton}" Command="{Binding BackCommand}" ToolTip="Volver">
+                <Path Data="{StaticResource IconBack}" Style="{StaticResource Icon}"/>
+            </Button>
+            <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="Galería" Style="{StaticResource TitleLarge}" FontSize="44"/>
+                <TextBlock Text="{Binding Summary}" Style="{StaticResource Caption}"/>
             </StackPanel>
-        </Border>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{StaticResource SecondaryButton}" Command="{Binding DeselectAllCommand}" Margin="0,0,12,0" FontSize="20" Padding="22,12"
+                        Content="Deseleccionar" Visibility="{Binding HasSelectedItems, Converter={StaticResource BoolToVisibility}}"/>
+                <Button Style="{StaticResource DangerButton}" Command="{Binding DeleteSelectionCommand}" FontSize="20" Padding="22,12">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource IconTrash}" Style="{StaticResource Icon}" Width="22" Height="22" Margin="0,0,10,0"/>
+                        <TextBlock VerticalAlignment="Center">
+                            <Run Text="Borrar"/> <Run Text="{Binding SelectedCount, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
 
-        <TextBlock Grid.Row="1" Text="Seleccioná las que quieras borrar. Tocá la figurita para ver."
-                   Style="{StaticResource Caption}" Margin="20,14,20,8"/>
-
-        <ListBox Grid.Row="2" ItemsSource="{Binding Items}" Margin="16,0,16,16" Background="Transparent" BorderThickness="0"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <Border Background="{StaticResource BgCardBrush}" CornerRadius="12" Margin="0,6" Padding="0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-                        <Grid Margin="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,14,0"
-                                      Foreground="{StaticResource TextPrimaryBrush}">
-                                <CheckBox.LayoutTransform>
-                                    <ScaleTransform ScaleX="2.2" ScaleY="2.2"/>
-                                </CheckBox.LayoutTransform>
-                            </CheckBox>
-                            <Button Grid.Column="1" Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                    CommandParameter="{Binding}" Padding="8" Margin="0" Cursor="Hand"
-                                    Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Left" Foreground="{StaticResource TextPrimaryBrush}">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border CornerRadius="8" ClipToBounds="True" Margin="0,0,14,0">
-                                        <Image Source="{Binding Thumbnail}" Width="64" Height="88" Stretch="UniformToFill"/>
-                                    </Border>
-                                    <TextBlock Text="{Binding Id}" VerticalAlignment="Center" Style="{StaticResource Body}"/>
-                                </StackPanel>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" PanningMode="VerticalOnly" Padding="28,0,28,28">
+            <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="4" VerticalAlignment="Top"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="10">
+                            <Button Style="{StaticResource ButtonBase}" CommandParameter="{Binding}"
+                                    Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border CornerRadius="16" Background="{StaticResource GlassBrush}" BorderBrush="{StaticResource GlassBorderBrush}"
+                                                BorderThickness="1" Padding="6">
+                                            <Border CornerRadius="12" ClipToBounds="True">
+                                                <Grid>
+                                                    <Control Style="{StaticResource Spinner}" Width="32" Height="32"
+                                                             Visibility="{Binding Thumbnail, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+                                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" Height="360"/>
+                                                </Grid>
+                                            </Border>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
                             </Button>
+                            <CheckBox Style="{StaticResource SelectToggle}" IsChecked="{Binding IsSelected}"
+                                      HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,14,0"/>
                         </Grid>
-                    </Border>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
     </Grid>
 </UserControl>

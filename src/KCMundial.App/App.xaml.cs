@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using KCMundial.App.Services;
 using KCMundial.App.ViewModels;
 using KCMundial.Camera;
@@ -14,102 +15,88 @@ public partial class App : Application
 {
     private LocalServerHost? _serverHost;
     private ICameraManager? _cameraManager;
+    private FiguritaComposer? _composer;
     private IAppLogger? _logger;
 
     private async void Application_Startup(object sender, StartupEventArgs e)
     {
         var pathResolver = new PathResolver();
         pathResolver.EnsureFolders();
-        var logPath = Path.Combine(pathResolver.RootInstallPath, "kcmundial.log");
-        _logger = new FileAppLogger(logPath);
-        _logger.Info($"KCMundial starting. Log file: {Path.GetFullPath(logPath)}");
+        _logger = new FileAppLogger(Path.Combine(pathResolver.RootInstallPath, "kcmundial.log"));
+        _logger.Info($"KCMundial starting in {pathResolver.RootInstallPath}");
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            _logger?.Error("Unobserved task exception", args.Exception);
+            args.SetObserved();
+        };
 
-        var fileNaming = new FileNaming();
+        var settings = AppSettings.Load(pathResolver.RootInstallPath, _logger);
         _cameraManager = new FallbackCameraManager(_logger);
 
-        var cascadePath = Path.Combine(pathResolver.AssetsFolder, "haarcascade_frontalface_default.xml");
-        var haar = new FaceDetector(cascadePath);
+        var haar = new FaceDetector(Path.Combine(pathResolver.AssetsFolder, "haarcascade_frontalface_default.xml"));
         var yunetModelPath = Path.Combine(pathResolver.AssetsFolder, "models", "face_detection_yunet_2023mar.onnx");
-        IFaceDetector faceDetector;
-        if (File.Exists(yunetModelPath))
-        {
-            var yunet = new YuNetOnnxFaceDetector(yunetModelPath, scoreThreshold: 0.4f, _logger)
-            {
-                UseNormalizedInput = false,
-                UseRgbOrder = false
-            };
-            faceDetector = new FaceDetectorWithFallback(yunet, haar, _logger);
-        }
-        else
-        {
-            _logger?.Warn("YuNet model not found, using Haar cascade only");
-            faceDetector = haar;
-        }
-        var positioningValidator = new PositioningValidator();
-        var composer = new StickerComposer(pathResolver, _logger);
+        IFaceDetector faceDetector = File.Exists(yunetModelPath)
+            ? new FaceDetectorWithFallback(
+                new YuNetOnnxFaceDetector(yunetModelPath, scoreThreshold: 0.4f, _logger) { UseNormalizedInput = false, UseRgbOrder = false },
+                haar, _logger)
+            : haar;
+
         var metadataWriter = new MetadataWriter(pathResolver);
-        var uploadService = new PhotoUploadService(_logger);
-        var exportService = new ExportService(pathResolver, fileNaming, composer, faceDetector, metadataWriter, uploadService, _logger);
+        _composer = new FiguritaComposer(_logger);
+        var exportService = new ExportService(pathResolver, new FileNaming(), _composer, metadataWriter,
+            settings.UploadEnabled ? new PhotoUploadService(_logger) : null, _logger);
+        var printer = new PhotoPrinter(settings, _logger);
 
         _serverHost = new LocalServerHost(pathResolver, _logger);
         await _serverHost.StartAsync();
 
-        var mainVm = new MainViewModel(_cameraManager, faceDetector, positioningValidator, exportService, _serverHost, pathResolver, _logger);
-        ISecondaryDisplay? secondaryDisplay = null;
-        var screens = ScreenHelper.GetAllMonitors();
-        if (screens.Count >= 2)
-        {
-            var secondaryVm = new SecondaryDisplayViewModel(pathResolver, _serverHost, metadataWriter);
-            secondaryDisplay = secondaryVm;
-            var secondaryWindow = new SecondaryWindow { DataContext = secondaryVm };
-            secondaryWindow.Show();
-        }
-        var shell = new ShellViewModel(mainVm, pathResolver, _serverHost, metadataWriter, secondaryDisplay);
+        var mainVm = new MainViewModel(_cameraManager, faceDetector, new PositioningValidator(), exportService, pathResolver, settings, _logger);
 
-        var mainWindow = new MainWindow { DataContext = shell };
-        if (screens.Count >= 1)
+        var monitors = ScreenHelper.GetAllMonitors();
+        _logger.Info("Monitors: " + string.Join("; ", monitors.Select(m => $"{m.DeviceName} {m.Width}x{m.Height}@{m.Left},{m.Top}{(m.IsPrimary ? " primary" : "")}")));
+
+        ISecondaryDisplay? secondaryDisplay = null;
+        if (monitors.Count >= 2)
         {
-            var primary = screens[0];
-            mainWindow.Left = primary.Left;
-            mainWindow.Top = primary.Top;
-            mainWindow.Width = primary.Width;
-            mainWindow.Height = primary.Height;
+            var secondaryVm = new SecondaryDisplayViewModel(pathResolver);
+            secondaryDisplay = secondaryVm;
+            ScreenHelper.ShowFullScreenOn(new SecondaryWindow(pathResolver.AssetsFolder, _logger) { DataContext = secondaryVm }, monitors[1]);
         }
-        mainWindow.Show();
+
+        var shell = new ShellViewModel(mainVm, exportService, pathResolver, _serverHost, metadataWriter, printer, settings, secondaryDisplay);
+        var mainWindow = new MainWindow { DataContext = shell };
+        MainWindow = mainWindow;
+        if (monitors.Count >= 1)
+            ScreenHelper.ShowFullScreenOn(mainWindow, monitors[0]);
+        else
+            mainWindow.Show();
 
         await mainVm.InitializeAsync();
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        // En un evento no queremos que la app se cierre sola: se registra y se sigue.
+        _logger?.Error("Unhandled UI exception", e.Exception);
+        e.Handled = true;
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         _logger?.Info("Application shutting down...");
-        
-        // Stop camera first (synchronous, should be fast)
-        try
-        {
-            _cameraManager?.Dispose();
-        }
-        catch (Exception ex)
-        {
-            _logger?.Error("Error disposing camera manager", ex);
-        }
+        try { _cameraManager?.Dispose(); }
+        catch (Exception ex) { _logger?.Error("Error disposing camera manager", ex); }
 
-        // Stop server with timeout (don't block too long)
         try
         {
             var stopTask = _serverHost?.StopAsync();
-            if (stopTask != null)
-            {
-                var completed = Task.WaitAny(stopTask, Task.Delay(1000));
-                if (completed != 0)
-                    _logger?.Warn("Server stop timed out, forcing exit");
-            }
+            if (stopTask != null && Task.WaitAny(stopTask, Task.Delay(1000)) != 0)
+                _logger?.Warn("Server stop timed out, forcing exit");
         }
-        catch (Exception ex)
-        {
-            _logger?.Error("Error stopping server", ex);
-        }
+        catch (Exception ex) { _logger?.Error("Error stopping server", ex); }
 
+        _composer?.Dispose();
         _logger?.Info("Application shutdown complete");
         base.OnExit(e);
     }

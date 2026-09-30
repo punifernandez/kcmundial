@@ -57,7 +57,7 @@ public sealed class FallbackCameraManager : ICameraManager
         return result;
     }
 
-    public async Task StartPreviewAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken = default, bool preferPortraitFormats = false)
+    public async Task StartPreviewAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken = default)
     {
         if (device.Id.StartsWith("dshow_", StringComparison.Ordinal) && int.TryParse(device.Id.AsSpan(6), out int idx) && _lastDshowList != null && idx >= 0 && idx < _lastDshowList.Count)
         {
@@ -66,12 +66,12 @@ public sealed class FallbackCameraManager : ICameraManager
             // CameraManager abre por índice; su Id debe ser "0", "1", etc.
             var byIndex = new CameraDevice { Id = idx.ToString(), Name = dshowDevice.Name };
 #pragma warning disable CS0618
-            await _dshow.StartPreviewAsync(byIndex, onFrame, cancellationToken, preferPortraitFormats).ConfigureAwait(false);
+            await _dshow.StartPreviewAsync(byIndex, onFrame, cancellationToken).ConfigureAwait(false);
 #pragma warning restore CS0618
             return;
         }
         _useDshow = false;
-        await _mediaCapture.StartPreviewAsync(device, onFrame, cancellationToken, preferPortraitFormats).ConfigureAwait(false);
+        await _mediaCapture.StartPreviewAsync(device, onFrame, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task StopPreviewAsync()
@@ -80,11 +80,11 @@ public sealed class FallbackCameraManager : ICameraManager
         await _dshow.StopPreviewAsync().ConfigureAwait(false);
     }
 
-    public Task<CaptureResult?> CaptureStillAsync(CancellationToken cancellationToken = default)
+    public Task<CaptureResult?> CaptureStillAsync(bool highRes = true, CancellationToken cancellationToken = default)
     {
         if (_useDshow)
-            return _dshow.CaptureStillAsync(cancellationToken);
-        return _mediaCapture.CaptureStillAsync(cancellationToken);
+            return _dshow.CaptureStillAsync(highRes, cancellationToken);
+        return _mediaCapture.CaptureStillAsync(highRes, cancellationToken);
     }
 
     public void Dispose()

@@ -1,46 +1,57 @@
 using System.IO;
 using System.Windows;
-using System.Windows.Media;
+using KCMundial.App.ViewModels;
+using KCMundial.Core.Interfaces;
 
 namespace KCMundial.App;
 
 public partial class SecondaryWindow : Window
 {
-    public SecondaryWindow()
+    private static readonly string[] VideoNames = { "promo", "idle", "video" };
+    private static readonly string[] VideoExtensions = { ".mp4", ".wmv", ".mov", ".avi" };
+
+    public SecondaryWindow(string assetsFolder, IAppLogger? logger)
     {
         InitializeComponent();
-        Loaded += SecondaryWindow_Loaded;
+
+        var video = VideoNames.SelectMany(n => VideoExtensions.Select(ext => Path.Combine(assetsFolder, n + ext))).FirstOrDefault(File.Exists);
+        if (video != null)
+        {
+            logger?.Info($"SecondaryWindow: idle video {video}");
+            IdleVideo.Source = new Uri(video, UriKind.Absolute);
+            IdleVideo.MediaEnded += (_, _) =>
+            {
+                IdleVideo.Position = TimeSpan.Zero;
+                IdleVideo.Play();
+            };
+            IdleVideo.MediaFailed += (_, args) => logger?.Error("SecondaryWindow: video failed", args.ErrorException);
+        }
+        else
+        {
+            logger?.Info("SecondaryWindow: no idle video found (assets/promo.mp4)");
+        }
+
+        Loaded += (_, _) => UpdateVideo();
+        DataContextChanged += (_, args) =>
+        {
+            if (args.OldValue is SecondaryDisplayViewModel oldVm) oldVm.PropertyChanged -= OnVmPropertyChanged;
+            if (args.NewValue is SecondaryDisplayViewModel newVm) newVm.PropertyChanged += OnVmPropertyChanged;
+        };
     }
 
-    private void SecondaryWindow_Loaded(object sender, RoutedEventArgs e)
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        // Posicionar en el segundo monitor
-        var screens = Services.ScreenHelper.GetAllMonitors();
-        if (screens.Count >= 2)
-        {
-            var second = screens[1];
-            Left = second.Left;
-            Top = second.Top;
-            Width = second.Width;
-            Height = second.Height;
-            WindowState = WindowState.Maximized;
-        }
+        if (e.PropertyName == nameof(SecondaryDisplayViewModel.Mode))
+            UpdateVideo();
+    }
 
-        // Video de espera (opcional): assets/promo.mp4 o assets/idle.mp4
-        var baseDir = AppContext.BaseDirectory;
-        foreach (var name in new[] { "promo.mp4", "idle.mp4", "video.mp4" })
-        {
-            var path = Path.Combine(baseDir, "assets", name);
-            if (File.Exists(path))
-            {
-                try
-                {
-                    IdleVideo.Source = new Uri(path, UriKind.Absolute);
-                    IdleVideo.MediaEnded += (_, _) => IdleVideo.Position = TimeSpan.Zero;
-                }
-                catch { /* ignore */ }
-                break;
-            }
-        }
+    /// <summary>El video solo corre cuando se ve (no gasta CPU/GPU mientras se muestra una foto).</summary>
+    private void UpdateVideo()
+    {
+        if (IdleVideo.Source == null) return;
+        if (DataContext is SecondaryDisplayViewModel { IsIdle: true })
+            IdleVideo.Play();
+        else
+            IdleVideo.Pause();
     }
 }

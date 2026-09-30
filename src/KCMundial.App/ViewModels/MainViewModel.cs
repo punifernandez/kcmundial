@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -8,11 +7,9 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KCMundial.App.Services;
-using KCMundial.Camera;
 using KCMundial.Core.Interfaces;
 using KCMundial.Core.Models;
 using KCMundial.Processing;
-using KCMundial.Vision;
 
 namespace KCMundial.App.ViewModels;
 
@@ -23,28 +20,39 @@ public partial class MainViewModel : ObservableObject
     private readonly IFaceDetector _faceDetector;
     private readonly IPositioningValidator _positioningValidator;
     private readonly ExportService _exportService;
-    private readonly LocalServerHost _serverHost;
     private readonly IPathResolver _pathResolver;
+    private readonly AppSettings _settings;
     private readonly IAppLogger? _logger;
     private const string CameraPreferenceFileName = "kcmundial_camera.txt";
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
-    private CancellationTokenSource? _previewCts;
-    private int _frameCount;
-    private const int FaceDetectionEveryNFrames = 5;
+
+    // Preview: la cámara escribe el último cuadro acá y la UI lo pinta cuando puede (nunca se encolan cuadros).
+    private readonly object _frameLock = new();
+    private byte[]? _frameBuffer;
+    private int _frameWidth;
+    private int _frameHeight;
+    private int _renderQueued;
+
+    // Detección de caras: como máximo una a la vez, sobre una versión chica del área visible.
+    private const int DetectionIntervalMs = 150;
+    private const int DetectionWidth = 480;
+    private int _detectionRunning;
+    private long _lastDetectionTick;
+    private byte[]? _detectionBuffer;
+
+    private readonly Dictionary<string, MediaPlayer> _sounds = new();
+    private static readonly string SoundsFolder = Path.Combine(AppContext.BaseDirectory, "assets", "sounds");
+
+    private int _previewGeneration;
+    private bool _isInitializing;
+    private CameraDevice? _currentDevice;
+    private readonly SemaphoreSlim _cameraSwitchLock = new(1, 1);
 
     [ObservableProperty]
     private WriteableBitmap? _previewImage;
 
     [ObservableProperty]
-    private string _guidanceMessage = "No te veo la cara";
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(CaptureCommand))]
-    private bool _isPositionOk;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(CaptureCommand))]
-    private bool _isCaptureEnabled = true;
+    private string _guidanceMessage = "";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CaptureCommand))]
@@ -68,45 +76,45 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string? _cameraError;
 
-    /// <summary>Updated only when preview is really running (after StartPreviewAsync succeeds). For "Activa: ..." label.</summary>
+    [ObservableProperty]
+    private bool _isCameraReady;
+
     [ObservableProperty]
     private string _activeCameraDisplayName = "";
 
-    /// <summary>Marco seleccionado (1, 2 o 3). Al cambiar se actualiza el overlay del preview.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PreviewBackOverlayImage))]
+    private bool _isAdminPanelOpen;
+
+    /// <summary>Marco seleccionado (1, 2 o 3).</summary>
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFrame1Selected))]
     [NotifyPropertyChangedFor(nameof(IsFrame2Selected))]
     [NotifyPropertyChangedFor(nameof(IsFrame3Selected))]
     private int _selectedFrameIndex = 1;
 
-    /// <summary>Overlay del marco en el preview (cambia con SelectedFrameIndex).</summary>
-    public ImageSource? PreviewBackOverlayImage => _previewBackOverlay ??= LoadPreviewBackOverlay();
-    private ImageSource? _previewBackOverlay;
+    [ObservableProperty]
+    private ImageSource? _previewFrameOverlay;
 
-    /// <summary>Miniaturas de los 3 marcos para el selector (Fondo_1, Fondo_2, Fondo_3).</summary>
-    public ImageSource? FrameThumbnail1 => _frameThumb1 ??= LoadFrameThumbnail(1);
-    public ImageSource? FrameThumbnail2 => _frameThumb2 ??= LoadFrameThumbnail(2);
-    public ImageSource? FrameThumbnail3 => _frameThumb3 ??= LoadFrameThumbnail(3);
-    private ImageSource? _frameThumb1;
-    private ImageSource? _frameThumb2;
-    private ImageSource? _frameThumb3;
+    /// <summary>Tamaño lógico del área de preview: misma proporción que el marco (se escala con un Viewbox).</summary>
+    [ObservableProperty]
+    private double _previewBoxWidth = 1000;
+
+    [ObservableProperty]
+    private double _previewBoxHeight = 1500;
+
+    public ImageSource? FrameThumbnail1 { get; }
+    public ImageSource? FrameThumbnail2 { get; }
+    public ImageSource? FrameThumbnail3 { get; }
 
     public bool IsFrame1Selected => SelectedFrameIndex == 1;
     public bool IsFrame2Selected => SelectedFrameIndex == 2;
     public bool IsFrame3Selected => SelectedFrameIndex == 3;
 
-    private int _previewWidth = 720;
-    private int _previewHeight = 1280;
-    private int _previewGeneration;
-    private bool _isInitializing;
-    private CameraDevice? _currentDevice;
-    private readonly SemaphoreSlim _cameraSwitchLock = new(1, 1);
-    private DateTime _lastDebugSave = DateTime.MinValue;
-    private const int DebugSaveIntervalSeconds = 5;
-    private static readonly string SoundsFolder = Path.Combine(AppContext.BaseDirectory, "assets", "sounds");
-    private readonly MediaPlayer _soundPlayer = new MediaPlayer();
+    public double PreviewRotation => FiguritaComposer.NormalizeRotation(_settings.CameraRotation);
+    public double PreviewMirrorScale => _settings.MirrorPreview ? -1 : 1;
 
+    /// <summary>Pide a la vista el destello blanco del disparo.</summary>
+    public event Action? FlashRequested;
     public event Action? InitializationComplete;
 
     public MainViewModel(
@@ -114,118 +122,67 @@ public partial class MainViewModel : ObservableObject
         IFaceDetector faceDetector,
         IPositioningValidator positioningValidator,
         ExportService exportService,
-        LocalServerHost serverHost,
         IPathResolver pathResolver,
+        AppSettings settings,
         IAppLogger? logger)
     {
         _cameraManager = cameraManager;
         _faceDetector = faceDetector;
         _positioningValidator = positioningValidator;
         _exportService = exportService;
-        _serverHost = serverHost;
         _pathResolver = pathResolver;
+        _settings = settings;
         _logger = logger;
         _cameraManager.CameraError += OnCameraError;
+
+        FrameThumbnail1 = QrImageFactory.LoadImage(_pathResolver.GetFramePath(1), 240);
+        FrameThumbnail2 = QrImageFactory.LoadImage(_pathResolver.GetFramePath(2), 240);
+        FrameThumbnail3 = QrImageFactory.LoadImage(_pathResolver.GetFramePath(3), 240);
+        LoadFrameOverlay();
+        PreloadSounds();
     }
 
     public void SetNavigation(INavigationService navigation) => _navigation = navigation;
 
-    partial void OnSelectedFrameIndexChanged(int value)
+    // ---------------------------------------------------------------- Marcos
+
+    partial void OnSelectedFrameIndexChanged(int value) => LoadFrameOverlay();
+
+    private void LoadFrameOverlay()
     {
-        _previewBackOverlay = null;
-        OnPropertyChanged(nameof(PreviewBackOverlayImage));
+        var overlay = QrImageFactory.LoadImage(_pathResolver.GetFramePath(SelectedFrameIndex), 1200);
+        PreviewFrameOverlay = overlay;
+        var aspect = overlay is BitmapSource b && b.PixelHeight > 0 ? (double)b.PixelWidth / b.PixelHeight : FiguritaComposer.DefaultAspect;
+        PreviewBoxWidth = 1000 * aspect;
+        PreviewBoxHeight = 1000;
     }
 
-    private ImageSource? LoadPreviewBackOverlay()
-    {
-        var path = _pathResolver.GetFramePath(SelectedFrameIndex);
-        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
-        try
-        {
-            var bi = new BitmapImage();
-            bi.BeginInit();
-            bi.CacheOption = BitmapCacheOption.OnLoad;
-            bi.UriSource = new Uri(path, UriKind.Absolute);
-            bi.EndInit();
-            bi.Freeze();
-            return bi;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private ImageSource? LoadFrameThumbnail(int frameIndex)
-    {
-        var path = _pathResolver.GetFramePath(frameIndex);
-        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
-        try
-        {
-            var bi = new BitmapImage();
-            bi.BeginInit();
-            bi.CacheOption = BitmapCacheOption.OnLoad;
-            bi.DecodePixelWidth = 120;
-            bi.UriSource = new Uri(path, UriKind.Absolute);
-            bi.EndInit();
-            bi.Freeze();
-            return bi;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    private double FrameAspect => PreviewBoxWidth / PreviewBoxHeight;
 
     [RelayCommand]
     private void SelectFrame(object? parameter)
     {
-        if (parameter is int i)
+        if (IsBusy) return;
+        var n = parameter switch
         {
-            var n = Math.Clamp(i, 1, 3);
-            if (SelectedFrameIndex != n) SelectedFrameIndex = n;
-            return;
-        }
-        if (parameter is string s && int.TryParse(s, out var parsed))
-        {
-            var n = Math.Clamp(parsed, 1, 3);
-            if (SelectedFrameIndex != n) SelectedFrameIndex = n;
-        }
+            int i => i,
+            string s when int.TryParse(s, out var parsed) => parsed,
+            _ => SelectedFrameIndex
+        };
+        SelectedFrameIndex = Math.Clamp(n, 1, 3);
     }
 
-    partial void OnSelectedCameraChanged(CameraDevice? value)
-    {
-        if (value == null || _isInitializing)
-        {
-            _logger?.Info($"MainViewModel: OnSelectedCameraChanged ignored (value={value?.DisplayName}, _isInitializing={_isInitializing})");
-            return;
-        }
-    }
+    // ---------------------------------------------------------------- Cámara
 
     public void UserSelectedCamera(CameraDevice device)
     {
-        if (_isInitializing)
-        {
-            _logger?.Info($"MainViewModel: UserSelectedCamera ignored during init (device=\"{device.DisplayName}\")");
+        if (_isInitializing || _currentDevice?.DeviceId == device.DeviceId)
             return;
-        }
-        if (_currentDevice?.DeviceId == device.DeviceId)
-        {
-            _logger?.Info($"MainViewModel: UserSelectedCamera ignored, already on camera \"{device.DisplayName}\"");
-            return;
-        }
-        _logger?.Info($"MainViewModel: Requested camera = {device.DisplayName} (StableKey={device.StableKey}, DeviceId)");
-        
-        // Update UI immediately
-        _dispatcher.Invoke(() =>
-        {
-            CameraError = null;
-            IsCaptureEnabled = false;
-            PreviewImage = null;
-            GuidanceMessage = "Conectando...";
-        });
-        
-        // Start camera switch in background - rely on CameraManager for orderly switching
+        _logger?.Info($"MainViewModel: user selected camera {device.DisplayName}");
+        CameraError = null;
+        IsCameraReady = false;
+        PreviewImage = null;
+
         _ = Task.Run(async () =>
         {
             await _cameraSwitchLock.WaitAsync();
@@ -234,25 +191,11 @@ public partial class MainViewModel : ObservableObject
                 await StartPreviewAsync(device).ConfigureAwait(false);
                 _currentDevice = device;
                 SaveCameraPreference(device.DeviceId);
-                _dispatcher.Invoke(() =>
-                {
-                    var matchingCamera = Cameras.FirstOrDefault(c => c.DeviceId == device.DeviceId);
-                    if (matchingCamera != null)
-                        SelectedCamera = matchingCamera;
-                });
-                _logger?.Info($"MainViewModel: Active camera = {device.DisplayName} (preview started)");
             }
             catch (Exception ex)
             {
                 _logger?.Error($"MainViewModel: StartPreview failed for \"{device.DisplayName}\"", ex);
-                _dispatcher.Invoke(() =>
-                {
-                    ActiveCameraDisplayName = "";
-                    CameraError = $"Error: {ex.Message}";
-                    GuidanceMessage = "Error al conectar";
-                    if (_currentDevice != null)
-                        SelectedCamera = Cameras.FirstOrDefault(c => c.DeviceId == _currentDevice.DeviceId) ?? _currentDevice;
-                });
+                _dispatcher.Invoke(() => CameraError = $"No se pudo abrir la cámara: {ex.Message}");
             }
             finally
             {
@@ -263,16 +206,15 @@ public partial class MainViewModel : ObservableObject
 
     private void OnCameraError(object? sender, string message)
     {
-        _dispatcher.Invoke(() =>
+        _dispatcher.BeginInvoke(() =>
         {
             CameraError = message;
-            IsCaptureEnabled = false;
+            IsCameraReady = false;
         });
     }
 
     public async Task InitializeAsync()
     {
-        _logger?.Info("MainViewModel: enumerating cameras (Windows.Devices.Enumeration)");
         _isInitializing = true;
         IReadOnlyList<CameraDevice> list;
         try
@@ -284,318 +226,260 @@ public partial class MainViewModel : ObservableObject
             _logger?.Error("MainViewModel: GetCamerasAsync failed", ex);
             list = Array.Empty<CameraDevice>();
         }
-        _logger?.Info($"MainViewModel: enumerated {list.Count} camera(s)");
-        foreach (var c in list)
-        {
-            var idPreview = c.Id.Length > 8 ? c.Id.Substring(0, 8) + "..." : c.Id;
-            _logger?.Info($"  name=\"{c.Name}\" id={idPreview}");
-        }
+        _logger?.Info($"MainViewModel: {list.Count} camera(s): {string.Join(", ", list.Select(c => c.DisplayName))}");
+
+        var preferredId = LoadCameraPreference();
+        var toSelect = list.FirstOrDefault(c => string.Equals(c.DeviceId, preferredId, StringComparison.Ordinal))
+                       // La Brio puede cambiar de Id si se enchufa en otro puerto: buscarla por nombre.
+                       ?? list.FirstOrDefault(c => c.DisplayName.Contains("BRIO", StringComparison.OrdinalIgnoreCase))
+                       ?? list.FirstOrDefault();
+
         await _dispatcher.InvokeAsync(() =>
         {
             Cameras.Clear();
-            foreach (var c in list)
-                Cameras.Add(c);
+            foreach (var c in list) Cameras.Add(c);
+            SelectedCamera = toSelect;
+            if (toSelect == null) CameraError = "No se encontró ninguna cámara.";
         });
-        await Task.Delay(200);
-        var preferredDeviceId = LoadCameraPreference();
-        CameraDevice? toSelect = null;
-        if (!string.IsNullOrWhiteSpace(preferredDeviceId))
-        {
-            toSelect = list.FirstOrDefault(c => string.Equals(c.DeviceId, preferredDeviceId.Trim(), StringComparison.Ordinal));
-            if (toSelect != null)
-                _logger?.Info($"MainViewModel: restored preference by DeviceId: {toSelect.DisplayName} (StableKey={toSelect.StableKey})");
-            else
-            {
-                _logger?.Info($"MainViewModel: preferred DeviceId not found in list");
-                // Si la preferencia no coincide (ej. Brio en otro puerto USB), intentar misma cámara por nombre (ej. "BRIO")
-                var byName = list.FirstOrDefault(c => c.DisplayName.Contains("BRIO", StringComparison.OrdinalIgnoreCase));
-                if (byName != null)
-                {
-                    toSelect = byName;
-                    _logger?.Info($"MainViewModel: fallback to camera by name: {toSelect.DisplayName}");
-                }
-            }
-        }
-        if (toSelect == null && list.Count > 0)
-            toSelect = list[0];
-        await _dispatcher.InvokeAsync(() =>
-        {
-            SelectedCamera = toSelect ?? (list.Count > 0 ? list[0] : null);
-        });
-        await Task.Delay(300);
         _isInitializing = false;
         InitializationComplete?.Invoke();
-        if (toSelect != null)
-            _logger?.Info($"MainViewModel: starting preview for camera {toSelect.DisplayName} (StableKey={toSelect.StableKey})");
-        else
-        {
-            _logger?.Warn("MainViewModel: no camera to start preview");
-        }
+        if (toSelect == null) return;
+
         await _cameraSwitchLock.WaitAsync();
         try
-        {
-        if (toSelect != null)
         {
             await StartPreviewAsync(toSelect).ConfigureAwait(false);
             _currentDevice = toSelect;
             SaveCameraPreference(toSelect.DeviceId);
-            await _dispatcher.InvokeAsync(() =>
-            {
-                if (SelectedCamera?.DeviceId != toSelect.DeviceId)
-                    SelectedCamera = toSelect;
-            });
-        }
         }
         catch (Exception ex)
         {
-            _logger?.Error($"MainViewModel: StartPreview failed for \"{toSelect?.DisplayName ?? "(none)"}\"", ex);
-            _dispatcher.Invoke(() => CameraError = $"Error: {ex.Message}");
+            _logger?.Error($"MainViewModel: StartPreview failed for \"{toSelect.DisplayName}\"", ex);
+            _dispatcher.Invoke(() => CameraError = $"No se pudo abrir la cámara: {ex.Message}");
         }
         finally
         {
             _cameraSwitchLock.Release();
         }
     }
+
     private string GetCameraPreferencePath() => Path.Combine(_pathResolver.RootInstallPath, CameraPreferenceFileName);
+
     private string? LoadCameraPreference()
     {
         try
         {
             var path = GetCameraPreferencePath();
-            if (File.Exists(path))
-            {
-                var deviceId = File.ReadAllText(path).Trim();
-                return string.IsNullOrEmpty(deviceId) ? null : deviceId;
-            }
+            return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
         }
         catch (Exception ex)
         {
             _logger?.Warn($"LoadCameraPreference: {ex.Message}");
-        }
-        return null;
-    }
-    private void SaveCameraPreference(string preferredCameraDeviceId)
-    {
-        try
-        {
-            var path = GetCameraPreferencePath();
-            File.WriteAllText(path, preferredCameraDeviceId ?? "");
-        }
-        catch (Exception ex)
-        {
-            _logger?.Warn($"SaveCameraPreference: {ex.Message}");
+            return null;
         }
     }
 
-    public async Task StartPreviewAsync(CameraDevice device)
+    private void SaveCameraPreference(string deviceId)
     {
-        _logger?.Info($"StartPreviewAsync: Requested camera = {device.DisplayName} (StableKey={device.StableKey})");
-        _dispatcher.Invoke(() => ActiveCameraDisplayName = "");
-        var gen = ++_previewGeneration;
-        _previewCts = new CancellationTokenSource();
-        _positioningValidator.SetFrameSize(_previewWidth, _previewHeight);
-        Action<byte[], int, int> callback = (bgr, w, h) =>
+        try { File.WriteAllText(GetCameraPreferencePath(), deviceId ?? ""); }
+        catch (Exception ex) { _logger?.Warn($"SaveCameraPreference: {ex.Message}"); }
+    }
+
+    private async Task StartPreviewAsync(CameraDevice device)
+    {
+        var gen = Interlocked.Increment(ref _previewGeneration);
+        await _cameraManager.StartPreviewAsync(device, (bgra, w, h) =>
         {
-            if (gen != _previewGeneration) return;
-            OnPreviewFrame(bgr, w, h);
-        };
-        await _cameraManager.StartPreviewAsync(device, callback, _previewCts.Token, preferPortraitFormats: true).ConfigureAwait(false);
-        _dispatcher.Invoke(() =>
+            if (gen == Volatile.Read(ref _previewGeneration))
+                OnCameraFrame(bgra, w, h);
+        }).ConfigureAwait(false);
+        await _dispatcher.InvokeAsync(() =>
         {
             ActiveCameraDisplayName = device.DisplayName;
-            if (_currentDevice?.DeviceId == device.DeviceId)
-                GuidanceMessage = "No te veo la cara";
-        });
-        _logger?.Info($"StartPreviewAsync: Active camera = {device.DisplayName} (preview running)");
-    }
-
-    private void OnPreviewFrame(byte[] bgr, int width, int height)
-    {
-        _previewWidth = width;
-        _previewHeight = height;
-        _dispatcher.Invoke(() =>
-        {
-            UpdatePreviewBitmap(bgr, width, height);
-            _frameCount++;
-            if (_frameCount % FaceDetectionEveryNFrames == 0)
-            {
-                var copy = new byte[bgr.Length];
-                Array.Copy(bgr, copy, bgr.Length);
-                Task.Run(() =>
-                {
-                    var result = RunPositioningValidationOffThread(copy, width, height);
-                    _dispatcher.Invoke(() => ApplyPositioningResult(result));
-                });
-            }
-            if ((DateTime.UtcNow - _lastDebugSave).TotalSeconds >= DebugSaveIntervalSeconds)
-            {
-                _lastDebugSave = DateTime.UtcNow;
-                var debugCopy = new byte[bgr.Length];
-                Array.Copy(bgr, debugCopy, bgr.Length);
-                var w = width;
-                var h = height;
-                Task.Run(() => _exportService.SaveDebugFrame(debugCopy, w, h));
-            }
+            SelectedCamera = Cameras.FirstOrDefault(c => c.DeviceId == device.DeviceId) ?? SelectedCamera;
         });
     }
 
-    private PositioningResult RunPositioningValidationOffThread(byte[] bgr, int width, int height)
+    /// <summary>Hilo de la cámara: copia el cuadro y pide un repintado si no hay uno pendiente.</summary>
+    private void OnCameraFrame(byte[] bgra, int width, int height)
     {
-        _positioningValidator.SetFrameSize(width, height);
-        var faces = _faceDetector.Detect(bgr, width, height);
-        FaceInfo? primary = null;
-        if (faces.Count > 0)
+        lock (_frameLock)
         {
-            var f = faces[0];
-            primary = new FaceInfo
-            {
-                CenterX = f.CenterX,
-                CenterY = f.CenterY,
-                Width = f.Width,
-                Height = f.Height,
-                EyesY = f.Y + f.Height * 0.35
-            };
+            if (_frameBuffer == null || _frameBuffer.Length != bgra.Length)
+                _frameBuffer = new byte[bgra.Length];
+            Buffer.BlockCopy(bgra, 0, _frameBuffer, 0, bgra.Length);
+            _frameWidth = width;
+            _frameHeight = height;
         }
-        return _positioningValidator.Validate(faces.Count, primary);
+        if (Interlocked.Exchange(ref _renderQueued, 1) == 0)
+            _dispatcher.BeginInvoke(RenderLatestFrame, DispatcherPriority.Render);
+
+        MaybeStartFaceDetection(bgra, width, height);
     }
 
-    private void ApplyPositioningResult(PositioningResult result)
+    private void RenderLatestFrame()
     {
-        GuidanceMessage = result.GuidanceMessage;
-        IsPositionOk = result.IsOk;
-        IsCaptureEnabled = true; // Allow capture regardless of face/position
+        Volatile.Write(ref _renderQueued, 0);
+        lock (_frameLock)
+        {
+            if (_frameBuffer == null) return;
+            if (PreviewImage == null || PreviewImage.PixelWidth != _frameWidth || PreviewImage.PixelHeight != _frameHeight)
+                PreviewImage = new WriteableBitmap(_frameWidth, _frameHeight, 96, 96, PixelFormats.Bgr32, null);
+            PreviewImage.WritePixels(new Int32Rect(0, 0, _frameWidth, _frameHeight), _frameBuffer, _frameWidth * 4, 0);
+        }
+        if (!IsCameraReady)
+        {
+            IsCameraReady = true;
+            CameraError = null;
+        }
     }
 
-    private void UpdatePreviewBitmap(byte[] bgr, int width, int height)
+    private void MaybeStartFaceDetection(byte[] bgra, int width, int height)
     {
-        if (PreviewImage == null || PreviewImage.PixelWidth != width || PreviewImage.PixelHeight != height)
-            PreviewImage = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgr24, null);
-        PreviewImage!.WritePixels(new Int32Rect(0, 0, width, height), bgr, width * 3, 0);
+        var now = Environment.TickCount64;
+        if (IsBusy || now - Interlocked.Read(ref _lastDetectionTick) < DetectionIntervalMs) return;
+        if (Interlocked.CompareExchange(ref _detectionRunning, 1, 0) != 0) return;
+
+        FrameSampler.SampleVisibleBgr(bgra, width, height, _settings.CameraRotation, FrameAspect, DetectionWidth,
+            ref _detectionBuffer, out var w, out var h);
+        var buffer = _detectionBuffer!;
+        Task.Run(() =>
+        {
+            try
+            {
+                var faces = _faceDetector.Detect(buffer, w, h);
+                FaceInfo? primary = null;
+                if (faces.Count > 0)
+                {
+                    var f = faces.OrderByDescending(x => x.Width * x.Height).First();
+                    primary = new FaceInfo { CenterX = f.CenterX, CenterY = f.CenterY, Width = f.Width, Height = f.Height, EyesY = f.Y + f.Height * 0.35 };
+                }
+                _positioningValidator.SetFrameSize(w, h);
+                var result = _positioningValidator.Validate(faces.Count, primary);
+                _dispatcher.BeginInvoke(() => GuidanceMessage = result.GuidanceMessage);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Warn($"Face detection: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _lastDetectionTick, Environment.TickCount64);
+                Volatile.Write(ref _detectionRunning, 0);
+            }
+        });
     }
 
+    // ---------------------------------------------------------------- Captura
+
+    private bool CanCapture() => !IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanCapture))]
     private async Task CaptureAsync()
     {
-        if (!IsPositionOk || IsBusy) return;
         IsBusy = true;
-        IsCaptureEnabled = false;
+        IsAdminPanelOpen = false;
+        CameraError = null;
+        GuidanceMessage = "";
         try
         {
-            for (var i = 3; i >= 1; i--)
+            IsCountdownVisible = true;
+            for (var i = _settings.CountdownSeconds; i >= 1; i--)
             {
-                IsCountdownVisible = true;
                 CountdownNumber = i;
                 PlaySound("ticktack");
                 await Task.Delay(1000);
             }
             IsCountdownVisible = false;
-            IsProcessingVisible = true;
-            
-            _logger?.Info("CaptureAsync: starting capture");
+
             PlaySound("shutter");
-            var capture = await _cameraManager.CaptureStillAsync();
+            FlashRequested?.Invoke();
+            // El cartel tapa el instante en que la cámara cambia a 4K y el preview se congela.
+            IsProcessingVisible = true;
+            var capture = await _cameraManager.CaptureStillAsync(_settings.HighResCapture);
             if (capture == null)
             {
-                _logger?.Warn("CaptureAsync: capture returned null");
-                IsProcessingVisible = false;
-                CameraError = "Error al capturar.";
+                CameraError = "No se pudo sacar la foto. Probá de nuevo.";
                 return;
             }
 
-            _logger?.Info($"CaptureAsync: capture successful, starting export");
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            string? id = null;
-            try
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var result = await _exportService.ExportAsync(capture, SelectedFrameIndex, _settings.CameraRotation, cts.Token);
+            if (result == null)
             {
-                id = await _exportService.ExportAsync(capture, SelectedFrameIndex, cts.Token);
+                CameraError = "No se pudo armar la foto. Probá de nuevo.";
+                return;
             }
-            catch (OperationCanceledException)
-            {
-                _logger?.Error("CaptureAsync: export timed out");
-                CameraError = "El procesamiento tardó demasiado.";
-            }
-            catch (Exception ex)
-            {
-                _logger?.Error("CaptureAsync: export exception", ex);
-                CameraError = $"Error al procesar: {ex.Message}";
-            }
-            
-            IsProcessingVisible = false;
-            if (id != null && _navigation != null)
-            {
-                _logger?.Info($"CaptureAsync: export successful, navigating to result {id}");
-                _navigation.NavigateToResult(id);
-            }
-            else if (id == null)
-            {
-                _logger?.Warn("CaptureAsync: export returned null");
-                CameraError = "Error al procesar.";
-            }
+            _navigation?.NavigateToResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger?.Error("CaptureAsync: export timed out");
+            CameraError = "El procesamiento tardó demasiado. Probá de nuevo.";
         }
         catch (Exception ex)
         {
             _logger?.Error("CaptureAsync: unexpected exception", ex);
-            IsProcessingVisible = false;
             CameraError = $"Error inesperado: {ex.Message}";
         }
         finally
         {
+            IsCountdownVisible = false;
+            IsProcessingVisible = false;
             IsBusy = false;
-            if (IsPositionOk)
-                IsCaptureEnabled = true;
+        }
+    }
+
+    private void PreloadSounds()
+    {
+        foreach (var name in new[] { "ticktack", "shutter" })
+        {
+            var path = new[] { ".wav", ".mp3" }.Select(ext => Path.Combine(SoundsFolder, name + ext)).FirstOrDefault(File.Exists);
+            if (path == null) continue;
+            try
+            {
+                var player = new MediaPlayer();
+                player.Open(new Uri(path, UriKind.Absolute));
+                _sounds[name] = player;
+            }
+            catch (Exception ex)
+            {
+                _logger?.Info($"Sound {name}: {ex.Message}");
+            }
         }
     }
 
     private void PlaySound(string name)
     {
-        foreach (var ext in new[] { ".mp3", ".wav" })
-        {
-            var path = Path.Combine(SoundsFolder, name + ext);
-            if (!File.Exists(path)) continue;
-            try
-            {
-                _soundPlayer.Open(new Uri(path, UriKind.Absolute));
-                _soundPlayer.Play();
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger?.Info($"PlaySound: could not play {path}: {ex.Message}");
-            }
-        }
+        if (!_sounds.TryGetValue(name, out var player)) return;
+        player.Stop();
+        player.Position = TimeSpan.Zero;
+        player.Play();
     }
-
-    private bool CanCapture() => !IsBusy;
 
     public void OnReturnFromResult()
     {
         IsProcessingVisible = false;
         IsCountdownVisible = false;
-        
-        // Ensure SelectedCamera is synchronized with current device when returning
-        _dispatcher.Invoke(() =>
-        {
-            if (_currentDevice != null)
-            {
-                var matchingCamera = Cameras.FirstOrDefault(c => c.DeviceId == _currentDevice.DeviceId);
-                if (matchingCamera != null)
-                    SelectedCamera = matchingCamera;
-            }
-            if (IsPositionOk)
-                IsCaptureEnabled = true;
-        });
+        IsAdminPanelOpen = false;
     }
+
+    // ---------------------------------------------------------------- Operador
+
+    [RelayCommand]
+    private void ToggleAdminPanel() => IsAdminPanelOpen = !IsAdminPanelOpen;
 
     [RelayCommand]
     private void OpenGallery()
     {
+        IsAdminPanelOpen = false;
         _navigation?.NavigateToGallery();
     }
 
     [RelayCommand]
     private void CloseApp()
     {
+        IsAdminPanelOpen = false;
         _navigation?.Close();
     }
 }

@@ -15,8 +15,9 @@ public sealed class PositioningValidator : IPositioningValidator
     private double _ellipseRadiusX => _frameWidth * 0.35;
     private double _ellipseRadiusY => _frameHeight * 0.40;
 
-    public double MinFaceWidthRatio { get; set; } = 0.12;
-    public double MaxFaceWidthRatio { get; set; } = 0.22;
+    // Relativo al ancho del área visible (proporción del marco, 2:3). Equivale a 0.12–0.22 del recorte 9:16 anterior.
+    public double MinFaceWidthRatio { get; set; } = 0.10;
+    public double MaxFaceWidthRatio { get; set; } = 0.185;
 
     public void SetFrameSize(int width, int height)
     {

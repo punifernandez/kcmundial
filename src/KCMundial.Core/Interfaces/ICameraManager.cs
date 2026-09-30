@@ -14,13 +14,10 @@ public interface ICameraManager : IDisposable
     Task<IReadOnlyList<CameraDevice>> GetCamerasAsync();
 
     /// <summary>
-    /// Start preview on the given camera device. Frames are pushed via the callback on a background thread.
+    /// Start preview on the given camera device. Frames are pushed via the callback on a background thread
+    /// as BGRA 32bpp (stride = width * 4). The buffer is reused: copy what you need before returning, and do not block.
     /// </summary>
-    /// <param name="device">Camera device from GetCamerasAsync()</param>
-    /// <param name="onFrame">Called with BGR frame (clone it if you need to keep it); do not block.</param>
-    /// <param name="cancellationToken">Stops the preview when cancelled.</param>
-    /// <param name="preferPortraitFormats">If true (p. ej. pantalla vertical), preferir resolución 9:16.</param>
-    Task StartPreviewAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken = default, bool preferPortraitFormats = false);
+    Task StartPreviewAsync(CameraDevice device, Action<byte[], int, int> onFrame, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Stop the current preview. Idempotent.
@@ -28,10 +25,10 @@ public interface ICameraManager : IDisposable
     Task StopPreviewAsync();
 
     /// <summary>
-    /// Capture a single high-resolution still from the current camera. Prefer 4K if stable.
-    /// Call after preview is running. Returns BGR + dimensions for saving and composition, or null on failure.
+    /// Capture a still from the current camera. With <paramref name="highRes"/> the camera briefly switches to its
+    /// largest format; if that fails the latest preview frame is returned. Null only if nothing is available.
     /// </summary>
-    Task<CaptureResult?> CaptureStillAsync(CancellationToken cancellationToken = default);
+    Task<CaptureResult?> CaptureStillAsync(bool highRes = true, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Whether a preview is currently active.
