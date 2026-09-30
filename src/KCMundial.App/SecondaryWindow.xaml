@@ -1,0 +1,64 @@
+<Window x:Class="KCMundial.App.SecondaryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:KCMundial.App.ViewModels"
+        Title="KCMundial - Monitor 2" WindowState="Maximized" WindowStyle="None"
+        ResizeMode="NoResize" Topmost="False"
+        Background="{StaticResource BgPrimaryBrush}">
+    <Grid>
+        <!-- Idle: video a tamaño completo -->
+        <Grid x:Name="IdlePanel">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Mode}" Value="{x:Static vm:SecondaryDisplayMode.Idle}">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <MediaElement x:Name="IdleVideo" LoadedBehavior="Play" UnloadedBehavior="Manual"
+                          Stretch="Uniform" Volume="0"/>
+        </Grid>
+
+        <!-- Resultado: figurita + QR, escalado para entrar en el monitor -->
+        <Grid x:Name="ResultPanel">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Mode}" Value="{x:Static vm:SecondaryDisplayMode.Result}">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Viewbox Stretch="Uniform" Margin="24">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border CornerRadius="16" Margin="0,0,48,0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" ClipToBounds="True">
+                        <Image Source="{Binding FiguritaImage}" Width="800" Height="1100" Stretch="Uniform"/>
+                    </Border>
+                    <Image Source="{Binding QrImage}" Width="280" Height="280" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Viewbox>
+        </Grid>
+
+        <!-- Galería: foto grande, entra en el monitor -->
+        <Grid x:Name="PhotoPanel">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Mode}" Value="{x:Static vm:SecondaryDisplayMode.GalleryPhoto}">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Viewbox Stretch="Uniform" Margin="24">
+                <Image Source="{Binding FiguritaImage}" Stretch="Uniform" Width="1080" Height="1920"/>
+            </Viewbox>
+        </Grid>
+    </Grid>
+</Window>

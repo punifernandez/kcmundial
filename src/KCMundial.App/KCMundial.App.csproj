@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="assets\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <ProjectReference Include="..\KCMundial.Camera\KCMundial.Camera.csproj" />
+    <ProjectReference Include="..\KCMundial.Core\KCMundial.Core.csproj" />
+    <ProjectReference Include="..\KCMundial.Processing\KCMundial.Processing.csproj" />
+    <ProjectReference Include="..\KCMundial.ShareServer\KCMundial.ShareServer.csproj" />
+    <ProjectReference Include="..\KCMundial.Storage\KCMundial.Storage.csproj" />
+    <ProjectReference Include="..\KCMundial.Vision\KCMundial.Vision.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+    <ProjectReference Include="..\KCMundial.Core\KCMundial.Core.csproj" />
+    <ProjectReference Include="..\KCMundial.Storage\KCMundial.Storage.csproj" />
+  </ItemGroup>
+</Project>

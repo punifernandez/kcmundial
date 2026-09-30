@@ -1,0 +1,125 @@
+<UserControl x:Class="KCMundial.App.Views.MainView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" d:DesignHeight="1080" d:DesignWidth="600">
+    <Grid Background="{StaticResource BgPrimaryBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header bar -->
+        <Border Grid.Row="0" Background="{StaticResource BgSecondaryBrush}" Padding="16,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Image x:Name="IconCamera" Width="44" Height="44" Margin="0,0,10,0" Visibility="Collapsed"/>
+                    <ComboBox x:Name="CameraComboBox" ItemsSource="{Binding Cameras}" SelectedItem="{Binding SelectedCamera, Mode=OneWay}" DisplayMemberPath="DisplayName"
+                              Style="{StaticResource ModernComboBox}" MinWidth="200" Margin="0,0,16,0" SelectionChanged="ComboBox_SelectionChanged"/>
+                    <Button x:Name="BtnGallery" Content="Galería" Command="{Binding OpenGalleryCommand}" Style="{StaticResource IconButton}" Margin="0,0,8,0" ToolTip="Galería"/>
+                </StackPanel>
+                <Button Grid.Column="1" x:Name="BtnClose" Command="{Binding CloseAppCommand}" Style="{StaticResource IconButton}" HorizontalAlignment="Right"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <!-- Selector de marco: miniaturas a la izquierda del botón de captura -->
+            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                <Button Command="{Binding SelectFrameCommand}" CommandParameter="1" Margin="0,0,0,8" Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand" ToolTip="Marco 1">
+                    <Border Width="80" Height="107" CornerRadius="6" BorderThickness="3">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsFrame1Selected}" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <Image Source="{Binding FrameThumbnail1}" Stretch="UniformToFill"/>
+                    </Border>
+                </Button>
+                <Button Command="{Binding SelectFrameCommand}" CommandParameter="2" Margin="0,0,0,8" Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand" ToolTip="Marco 2">
+                    <Border Width="80" Height="107" CornerRadius="6" BorderThickness="3">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsFrame2Selected}" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <Image Source="{Binding FrameThumbnail2}" Stretch="UniformToFill"/>
+                    </Border>
+                </Button>
+                <Button Command="{Binding SelectFrameCommand}" CommandParameter="3" Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand" ToolTip="Marco 3">
+                    <Border Width="80" Height="107" CornerRadius="6" BorderThickness="3">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsFrame3Selected}" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <Image Source="{Binding FrameThumbnail3}" Stretch="UniformToFill"/>
+                    </Border>
+                </Button>
+            </StackPanel>
+            <Viewbox Grid.Column="1" Stretch="Uniform">
+                <Grid>
+                    <Image Source="{Binding PreviewImage}" Stretch="Uniform" RenderTransformOrigin="0.5,0.5">
+                        <Image.RenderTransform>
+                            <ScaleTransform ScaleX="-1" ScaleY="1"/>
+                        </Image.RenderTransform>
+                    </Image>
+                    <Image Source="{Binding PreviewBackOverlayImage}" Stretch="Uniform" IsHitTestVisible="False"
+                           Visibility="{Binding PreviewBackOverlayImage, Converter={StaticResource NullToVisibility}}"/>
+                    <Button x:Name="BtnCapture" Command="{Binding CaptureCommand}" Padding="8"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" IsEnabled="{Binding IsCaptureEnabled}" ToolTip="Capturar">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCountdownVisible}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsProcessingVisible}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <TextBlock Text="{Binding GuidanceMessage}" Style="{StaticResource TitleMedium}" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                           Margin="0,0,0,80" TextWrapping="Wrap" TextAlignment="Center"/>
+                <Border Visibility="{Binding IsCountdownVisible, Converter={StaticResource BoolToVisibility}}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <TextBlock Text="{Binding CountdownNumber}" FontSize="120" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <Border Background="#E60f0f14" Visibility="{Binding IsProcessingVisible, Converter={StaticResource BoolToVisibility}}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <TextBlock Text="Procesando..." Style="{StaticResource TitleLarge}" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                    <TextBlock Text="{Binding CameraError}" Foreground="{StaticResource DangerBrush}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,60,0,0"
+                               Visibility="{Binding CameraError, Converter={StaticResource NullToVisibility}}"/>
+                </Grid>
+            </Viewbox>
+        </Grid>
+    </Grid>
+</UserControl>
