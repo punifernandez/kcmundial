@@ -14,7 +14,7 @@
 
         <Border Grid.Row="0" Style="{StaticResource HeaderPanel}" Margin="48,40,48,0">
             <Grid>
-                <Button Style="{StaticResource SquareIconButton}" Command="{Binding BackCommand}" HorizontalAlignment="Left" ToolTip="Volver">
+                <Button Style="{StaticResource SquareIconButton}" Command="{Binding BackCommand}" HorizontalAlignment="Left">
                     <Path Data="{StaticResource IconBack}" Style="{StaticResource Icon}"/>
                 </Button>
                 <StackPanel HorizontalAlignment="Center">

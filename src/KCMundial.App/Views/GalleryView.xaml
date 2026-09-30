@@ -40,7 +40,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Button Style="{StaticResource SquareIconButton}" Command="{Binding BackCommand}" ToolTip="Volver">
+            <Button Style="{StaticResource SquareIconButton}" Command="{Binding BackCommand}">
                 <Path Data="{StaticResource IconBack}" Style="{StaticResource Icon}"/>
             </Button>
             <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center">
@@ -65,7 +65,7 @@
             <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <UniformGrid Columns="4" VerticalAlignment="Top"/>
+                        <UniformGrid Columns="3" VerticalAlignment="Top"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
@@ -79,9 +79,9 @@
                                                 BorderThickness="1" Padding="6">
                                             <Border CornerRadius="12" ClipToBounds="True">
                                                 <Grid>
-                                                    <Control Style="{StaticResource Spinner}" Width="32" Height="32"
+                                                    <Control Style="{StaticResource Spinner}" Width="32" Height="32" Margin="0,120"
                                                              Visibility="{Binding Thumbnail, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
-                                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" Height="360"/>
+                                                    <Image Source="{Binding Thumbnail}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                                                 </Grid>
                                             </Border>
                                         </Border>

@@ -62,7 +62,7 @@ public partial class GalleryViewModel : ObservableObject
             foreach (var item in snapshot)
             {
                 if (token.IsCancellationRequested) return;
-                var thumb = QrImageFactory.LoadImage(item.Path, 300);
+                var thumb = QrImageFactory.LoadImage(item.Path, 360);
                 _dispatcher.BeginInvoke(() => item.Thumbnail = thumb, DispatcherPriority.Background);
             }
         }, token);
