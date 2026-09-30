@@ -9,6 +9,8 @@ se muestra la figurita con el QR.
 - Windows 10/11, .NET 8
 - Cámara **Logitech Brio 4K** (apaisada; también funciona montada vertical, ver `CameraRotation`)
 - Impresora **DNP DP-QW410** con su driver instalado y papel 4×6" (imprime en 3×4" con corte automático)
+- Impresora **Epson EcoTank L8050** con papel fotográfico A4, para el botón "Imprimir XL". El tipo de papel y
+  la calidad se toman de sus *Preferencias de impresión* en Windows: dejarlas en papel fotográfico / alta calidad.
 - Pantalla táctil vertical (principal) + monitor/TV (secundario, opcional)
 
 ## Compilar y correr
@@ -59,13 +61,17 @@ Se crea junto al `.exe` la primera vez que se abre la app. Cambiá los valores y
 | `MirrorPreview` | `true` | Preview en espejo (la foto final nunca sale espejada). |
 | `HighResCapture` | `true` | Foto en la resolución máxima de la cámara: pasa a 4K al empezar la cuenta regresiva (para que enfoque) y se queda con el cuadro más nítido. Si falla, usa el cuadro del preview. |
 | `CountdownSeconds` | `3` | Cuenta regresiva. |
-| `ResultAutoReturnSeconds` | `25` | Segundos en la pantalla de resultado antes de volver solo al inicio. |
 | `AutoPrint` | `true` | Imprimir apenas se saca la foto. |
 | `PrinterName` | `""` | Nombre (o parte) de la impresora. Vacío = la primera que contenga "QW410". |
 | `PrintCopies` | `1` | Copias por foto. |
 | `PrintPaperName` | `""` | Nombre (o parte) del papel del driver, tal como aparece en el log ("driver paper sizes"). Tiene prioridad sobre el tamaño. |
 | `PrintPageWidthInches` / `PrintPageHeightInches` | `3` / `4` | Si no hay `PrintPaperName`: se elige el papel del driver más parecido a este tamaño. |
 | `PrintMarginMm` | `2` | Margen blanco alrededor de la figurita en la hoja. |
+| `XlPrinterName` | `"L8050"` | Impresora del botón "Imprimir XL" (nombre o parte). |
+| `XlPaperName` | `""` | Papel de la XL por nombre (ver "driver paper sizes" en el log). Vacío = el más parecido al tamaño. |
+| `XlPageWidthInches` / `XlPageHeightInches` | `8.27` / `11.69` | Tamaño de hoja XL (A4). |
+| `XlMarginMm` | `3` | Margen de seguridad en la XL (la impresión sin bordes recorta los costados). |
+| `XlCopies` | `1` | Copias por cada "Imprimir XL". |
 | `UploadEnabled` | `true` | Subir la foto al servidor para el QR. Si no hay internet, el QR apunta a la red local. |
 
 ## Marcos

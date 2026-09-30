@@ -10,35 +10,35 @@ namespace KCMundial.App.Services;
 public sealed record PrintOutcome(bool Success, string Message);
 
 /// <summary>
-/// Imprime en la DNP DP-QW410 por la vía GDI de Windows (System.Drawing.Printing): es la que expone los
-/// tamaños de papel del driver de DNP, incluidos los de corte automático. Elige el papel por nombre
-/// (<see cref="AppSettings.PrintPaperName"/>) o, si no hay, el más parecido al tamaño configurado
-/// (por defecto 3×4": la hoja 4×6 cortada al medio, como la app anterior). La imagen va entera, sin recortar.
-/// Los trabajos se encolan de a uno.
+/// Imprime por la vía GDI de Windows (System.Drawing.Printing), que expone los tamaños de papel de los drivers
+/// (DNP con corte automático, Epson sin márgenes, etc.). Una instancia por impresora (<see cref="PrintProfile"/>):
+/// elige el papel por nombre o, si no hay, el más parecido al tamaño configurado. La imagen va entera, sin
+/// recortar, dentro del margen del perfil. Los trabajos se encolan de a uno.
 /// </summary>
 public sealed class PhotoPrinter
 {
-    private const string DefaultPrinterMatch = "QW410";
     /// <summary>Tolerancia para aceptar un papel "parecido" (en centésimas de pulgada, sumando ambos lados).</summary>
-    private const int PaperTolerance = 50;
+    private const int PaperTolerance = 60;
 
-    private readonly AppSettings _settings;
+    private readonly PrintProfile _profile;
     private readonly IAppLogger? _logger;
     private readonly SemaphoreSlim _queueLock = new(1, 1);
     private bool _loggedPaperList;
 
-    public PhotoPrinter(AppSettings settings, IAppLogger? logger)
+    public PhotoPrinter(PrintProfile profile, IAppLogger? logger)
     {
-        _settings = settings;
+        _profile = profile;
         _logger = logger;
     }
 
-    public async Task<PrintOutcome> PrintAsync(string imagePath, int copies)
+    public string Label => _profile.Label;
+
+    public async Task<PrintOutcome> PrintAsync(string imagePath)
     {
         await _queueLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            return await Task.Run(() => PrintCore(imagePath, copies)).ConfigureAwait(false);
+            return await Task.Run(() => PrintCore(imagePath, _profile.Copies)).ConfigureAwait(false);
         }
         finally
         {
@@ -54,8 +54,8 @@ public sealed class PhotoPrinter
         var printerName = FindPrinter();
         if (printerName == null)
         {
-            _logger?.Warn($"Print: printer not found. Installed: {string.Join("; ", PrinterSettings.InstalledPrinters.Cast<string>())}");
-            return new PrintOutcome(false, "No se encontró la impresora DNP.");
+            _logger?.Warn($"Print[{Label}]: printer \"{_profile.PrinterMatch}\" not found. Installed: {string.Join("; ", PrinterSettings.InstalledPrinters.Cast<string>())}");
+            return new PrintOutcome(false, $"No se encontró la impresora {Label}.");
         }
 
         using var image = Image.FromFile(imagePath);
@@ -97,8 +97,11 @@ public sealed class PhotoPrinter
                 g.TranslateTransform(page.Width, 0);
                 g.RotateTransform(90);
             }
-            // Entera y centrada: nunca se recorta el marco (la imagen ya trae su margen blanco).
-            var scale = Math.Min(areaW / image.Width, areaH / image.Height);
+            // Entera y centrada dentro del margen: nunca se recorta el marco.
+            var margin = (float)(_profile.MarginMm / 25.4 * 100);
+            var fitW = areaW - 2 * margin;
+            var fitH = areaH - 2 * margin;
+            var scale = Math.Min(fitW / image.Width, fitH / image.Height);
             var w = image.Width * scale;
             var h = image.Height * scale;
             g.DrawImage(image, (areaW - w) / 2, (areaH - h) / 2, w, h);
@@ -109,7 +112,7 @@ public sealed class PhotoPrinter
         doc.Print();
 
         var chosen = doc.DefaultPageSettings.PaperSize;
-        _logger?.Info($"Print: sent {Path.GetFileName(imagePath)} ({image.Width}x{image.Height}) to \"{printerName}\" " +
+        _logger?.Info($"Print[{Label}]: sent {Path.GetFileName(imagePath)} ({image.Width}x{image.Height}) to \"{printerName}\" " +
                       $"paper=\"{chosen.PaperName}\" {chosen.Width / 100.0:0.##}x{chosen.Height / 100.0:0.##}in " +
                       $"page={drawnPage.Width / 100.0:0.##}x{drawnPage.Height / 100.0:0.##}in rotated={rotated} copies={doc.PrinterSettings.Copies}" +
                       (problem != null ? $" (printer: {problem})" : ""));
@@ -122,7 +125,7 @@ public sealed class PhotoPrinter
     private string? FindPrinter()
     {
         var installed = PrinterSettings.InstalledPrinters.Cast<string>().ToList();
-        var wanted = string.IsNullOrWhiteSpace(_settings.PrinterName) ? DefaultPrinterMatch : _settings.PrinterName.Trim();
+        var wanted = _profile.PrinterMatch.Trim();
         return installed.FirstOrDefault(p => string.Equals(p, wanted, StringComparison.OrdinalIgnoreCase))
                ?? installed.FirstOrDefault(p => p.Contains(wanted, StringComparison.OrdinalIgnoreCase));
     }
@@ -134,21 +137,21 @@ public sealed class PhotoPrinter
         if (!_loggedPaperList)
         {
             _loggedPaperList = true;
-            _logger?.Info("Print: driver paper sizes: " + string.Join("; ", papers.Select(p =>
+            _logger?.Info($"Print[{Label}]: driver paper sizes: " + string.Join("; ", papers.Select(p =>
                 $"\"{p.PaperName}\" {p.Width / 100.0:0.##}x{p.Height / 100.0:0.##}in")));
         }
 
-        if (!string.IsNullOrWhiteSpace(_settings.PrintPaperName))
+        if (!string.IsNullOrWhiteSpace(_profile.PaperName))
         {
-            var name = _settings.PrintPaperName.Trim();
+            var name = _profile.PaperName.Trim();
             var byName = papers.FirstOrDefault(p => string.Equals(p.PaperName, name, StringComparison.OrdinalIgnoreCase))
                          ?? papers.FirstOrDefault(p => p.PaperName.Contains(name, StringComparison.OrdinalIgnoreCase));
             if (byName != null) return byName;
-            _logger?.Warn($"Print: paper \"{name}\" not found, trying by size");
+            _logger?.Warn($"Print[{Label}]: paper \"{name}\" not found, trying by size");
         }
 
-        var wantShort = (int)Math.Round(Math.Min(_settings.PrintPageWidthInches, _settings.PrintPageHeightInches) * 100);
-        var wantLong = (int)Math.Round(Math.Max(_settings.PrintPageWidthInches, _settings.PrintPageHeightInches) * 100);
+        var wantShort = (int)Math.Round(Math.Min(_profile.PageWidthInches, _profile.PageHeightInches) * 100);
+        var wantLong = (int)Math.Round(Math.Max(_profile.PageWidthInches, _profile.PageHeightInches) * 100);
         var best = papers
             .Select(p => (Paper: p, Distance: Math.Abs(Math.Min(p.Width, p.Height) - wantShort) + Math.Abs(Math.Max(p.Width, p.Height) - wantLong)))
             .Where(x => x.Distance <= PaperTolerance)
@@ -156,8 +159,8 @@ public sealed class PhotoPrinter
             .Select(x => x.Paper)
             .FirstOrDefault();
         if (best == null)
-            _logger?.Warn($"Print: no paper near {_settings.PrintPageWidthInches}x{_settings.PrintPageHeightInches}in, using printer default " +
-                          "(set PrintPaperName in kcmundial.settings.json with one of the driver paper sizes)");
+            _logger?.Warn($"Print[{Label}]: no paper near {_profile.PageWidthInches}x{_profile.PageHeightInches}in, using printer default " +
+                          "(set the paper name in kcmundial.settings.json with one of the driver paper sizes)");
         return best;
     }
 
@@ -178,7 +181,7 @@ public sealed class PhotoPrinter
         }
         catch (Exception ex)
         {
-            _logger?.Info($"Print: could not read printer status: {ex.Message}");
+            _logger?.Info($"Print[{Label}]: could not read printer status: {ex.Message}");
         }
         return null;
     }

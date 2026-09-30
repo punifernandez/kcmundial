@@ -23,7 +23,8 @@ public partial class ShellViewModel : ObservableObject, INavigationService
     private readonly IPathResolver _pathResolver;
     private readonly LocalServerHost _serverHost;
     private readonly MetadataWriter _metadataWriter;
-    private readonly PhotoPrinter _printer;
+    private readonly PhotoPrinter _smallPrinter;
+    private readonly PhotoPrinter _xlPrinter;
     private readonly AppSettings _settings;
     private readonly ISecondaryDisplay? _secondaryDisplay;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
@@ -37,7 +38,8 @@ public partial class ShellViewModel : ObservableObject, INavigationService
         IPathResolver pathResolver,
         LocalServerHost serverHost,
         MetadataWriter metadataWriter,
-        PhotoPrinter printer,
+        PhotoPrinter smallPrinter,
+        PhotoPrinter xlPrinter,
         AppSettings settings,
         ISecondaryDisplay? secondaryDisplay = null)
     {
@@ -45,7 +47,8 @@ public partial class ShellViewModel : ObservableObject, INavigationService
         _pathResolver = pathResolver;
         _serverHost = serverHost;
         _metadataWriter = metadataWriter;
-        _printer = printer;
+        _smallPrinter = smallPrinter;
+        _xlPrinter = xlPrinter;
         _settings = settings;
         _secondaryDisplay = secondaryDisplay;
         _mainViewModel.SetNavigation(this);
@@ -86,7 +89,8 @@ public partial class ShellViewModel : ObservableObject, INavigationService
     public void NavigateToResult(ExportResult result)
     {
         var qrUrl = QrUrlFor(result.Id);
-        CurrentViewModel = new ResultViewModel(result.Id, result.FiguritaPath, result.PrintPath, qrUrl, this, _printer, _settings);
+        var files = new FiguritaFiles(result.FiguritaPath, result.PrintPath, result.MasterPath);
+        CurrentViewModel = new ResultViewModel(result.Id, files, qrUrl, this, _smallPrinter, _xlPrinter, _settings);
         _secondaryDisplay?.ShowResult(result.Id, qrUrl);
     }
 
@@ -98,11 +102,8 @@ public partial class ShellViewModel : ObservableObject, INavigationService
 
     public void NavigateToGalleryDetail(string figuritaId)
     {
-        var displayPath = Path.Combine(_pathResolver.FiguritasFolder, figuritaId + ".jpg");
-        // Fotos viejas pueden no tener hoja de impresión: se imprime la figurita (el printer la ajusta sin recortar).
-        var printPath = Path.Combine(_pathResolver.ImpresionFolder, figuritaId + ".jpg");
-        if (!File.Exists(printPath)) printPath = displayPath;
-        CurrentViewModel = new GalleryDetailViewModel(figuritaId, displayPath, printPath, QrUrlFor(figuritaId) ?? LocalUrl(figuritaId), this, _pathResolver, _printer, _settings);
+        CurrentViewModel = new GalleryDetailViewModel(figuritaId, FiguritaFiles.For(_pathResolver, figuritaId),
+            QrUrlFor(figuritaId) ?? LocalUrl(figuritaId), this, _pathResolver, _smallPrinter, _xlPrinter);
         _secondaryDisplay?.ShowGalleryPhoto(figuritaId);
     }
 

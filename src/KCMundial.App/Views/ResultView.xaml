@@ -49,7 +49,7 @@
             <Image Source="{Binding FiguritaImage}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
         </Border>
 
-        <!-- Impresión + QR -->
+        <!-- QR + estado de las impresiones -->
         <Border Grid.Row="2" Style="{StaticResource GlassCard}" Margin="60,12,60,0">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -65,7 +65,7 @@
                 </Border>
                 <StackPanel Grid.Column="1" Margin="32,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="Escaneá y llevate tu foto" Style="{StaticResource TitleLarge}" FontSize="40"/>
-                    <TextBlock FontSize="20" Margin="0,4,0,24">
+                    <TextBlock FontSize="20" Margin="0,4,0,14">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                 <Setter Property="Text" Value="Apuntá la cámara del celular al código"/>
@@ -77,68 +77,40 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
-                    <!-- Estado de impresión -->
-                    <Border Style="{StaticResource Pill}" HorizontalAlignment="Left" Padding="20,12">
-                        <StackPanel Orientation="Horizontal">
-                            <Control Style="{StaticResource Spinner}" Width="28" Height="28" Foreground="{StaticResource GoldBrush}" Margin="0,0,14,0"
-                                     Visibility="{Binding IsPrinting, Converter={StaticResource BoolToVisibility}}"/>
-                            <Path Data="{StaticResource IconCheck}" Fill="{StaticResource SuccessBrush}" Width="30" Height="30" Stretch="Uniform" Margin="0,0,14,0"
-                                  Visibility="{Binding IsPrintDone, Converter={StaticResource BoolToVisibility}}"/>
-                            <Path Data="{StaticResource IconAlert}" Fill="{StaticResource DangerBrush}" Width="30" Height="30" Stretch="Uniform" Margin="0,0,14,0"
-                                  Visibility="{Binding IsPrintError, Converter={StaticResource BoolToVisibility}}"/>
-                            <Path Data="{StaticResource IconPrinter}" Fill="{StaticResource TextSecondaryBrush}" Width="30" Height="30" Stretch="Uniform" Margin="0,0,14,0"
-                                  Visibility="{Binding PrintStatusMessage, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
-                            <TextBlock Text="{Binding PrintStatusMessage, TargetNullValue='Imprimí tu foto cuando quieras'}" Style="{StaticResource Body}" FontSize="22"
-                                       VerticalAlignment="Center" MaxWidth="480"/>
-                        </StackPanel>
-                    </Border>
+                    <ContentControl Content="{Binding Small}" ContentTemplate="{StaticResource PrintStatusTemplate}" Focusable="False"/>
+                    <ContentControl Content="{Binding Xl}" ContentTemplate="{StaticResource PrintStatusTemplate}" Focusable="False"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Acciones -->
-        <StackPanel Grid.Row="3" Margin="60,28,60,48">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="24"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Style="{StaticResource SecondaryButton}" Command="{Binding PrintCommand}">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
-                        <TextBlock VerticalAlignment="Center">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="IMPRIMIR"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsPrintDone}" Value="True">
-                                            <Setter Property="Text" Value="IMPRIMIR OTRA"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsPrintError}" Value="True">
-                                            <Setter Property="Text" Value="REINTENTAR"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </StackPanel>
-                </Button>
-                <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Command="{Binding BackCommand}">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="{StaticResource IconCamera}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
-                        <TextBlock Text="SACAR OTRA FOTO" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-            </Grid>
-            <!-- Vuelta automática al inicio -->
-            <Border Height="6" CornerRadius="3" Background="{StaticResource GlassBrush}" Margin="0,24,0,0">
-                <Border CornerRadius="3" Background="{StaticResource CelesteGradientBrush}" HorizontalAlignment="Stretch" RenderTransformOrigin="0,0.5">
-                    <Border.RenderTransform>
-                        <ScaleTransform ScaleX="{Binding AutoReturnRemaining}"/>
-                    </Border.RenderTransform>
-                </Border>
-            </Border>
-        </StackPanel>
+        <!-- Acciones: sin tiempo, la pantalla espera a que el invitado elija -->
+        <Grid Grid.Row="3" Margin="60,28,60,48">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="18"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="18"/>
+                <ColumnDefinition Width="1.3*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Style="{StaticResource SecondaryButton}" Command="{Binding Small.PrintCommand}" Padding="18,16">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,10,0"/>
+                    <TextBlock Text="IMPRIMIR OTRA" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Command="{Binding Xl.PrintCommand}" Padding="18,16"
+                    BorderBrush="{StaticResource GoldBrush}">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,10,0"/>
+                    <TextBlock Text="IMPRIMIR XL" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="4" Style="{StaticResource PrimaryButton}" Command="{Binding BackCommand}" Padding="18,16">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource IconCamera}" Style="{StaticResource Icon}" Margin="0,0,10,0"/>
+                    <TextBlock Text="TOMAR OTRA FOTO" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
     </Grid>
 </UserControl>

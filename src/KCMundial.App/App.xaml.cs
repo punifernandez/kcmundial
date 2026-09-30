@@ -47,7 +47,8 @@ public partial class App : Application
         var printPage = new PrintPageSpec(settings.PrintPageWidthInches, settings.PrintPageHeightInches, settings.PrintMarginMm);
         var exportService = new ExportService(pathResolver, new FileNaming(), _composer, printPage, metadataWriter,
             settings.UploadEnabled ? new PhotoUploadService(_logger) : null, _logger);
-        var printer = new PhotoPrinter(settings, _logger);
+        var smallPrinter = new PhotoPrinter(settings.SmallPrintProfile, _logger);
+        var xlPrinter = new PhotoPrinter(settings.XlPrintProfile, _logger);
 
         _serverHost = new LocalServerHost(pathResolver, _logger);
         await _serverHost.StartAsync();
@@ -65,7 +66,7 @@ public partial class App : Application
             ScreenHelper.ShowFullScreenOn(new SecondaryWindow(pathResolver.AssetsFolder, _logger) { DataContext = secondaryVm }, monitors[1]);
         }
 
-        var shell = new ShellViewModel(mainVm, exportService, pathResolver, _serverHost, metadataWriter, printer, settings, secondaryDisplay);
+        var shell = new ShellViewModel(mainVm, exportService, pathResolver, _serverHost, metadataWriter, smallPrinter, xlPrinter, settings, secondaryDisplay);
         var mainWindow = new MainWindow { DataContext = shell };
         MainWindow = mainWindow;
         if (monitors.Count >= 1)
