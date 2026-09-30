@@ -38,6 +38,9 @@ Detalles de uso, configuración y archivos generados: `README.md`.
   proporción del marco (5:7).
 - La foto final nunca sale espejada (solo el preview).
 - La Sprocket/ADB ya no se usa.
+- Configuración de drivers: el operador la elige desde el panel (ventana del fabricante) y se guarda como DEVMODE
+  (`impresora_*.devmode` junto al .exe); tiene prioridad sobre las preferencias de Windows. La ventana principal
+  es Topmost para que no se vean popups de drivers ni la barra de tareas.
 - Pantalla de resultado sin tiempo: la figurita chica se imprime sola en la DNP; botones "Imprimir otra" (DNP),
   "Imprimir XL" (Epson L8050, A4: se imprime el máster 5:7 entero, ~20×28 cm) y "Tomar otra foto".
 

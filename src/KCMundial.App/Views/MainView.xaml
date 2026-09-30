@@ -241,6 +241,21 @@
                     <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0">
                         <Run Text="Activa:"/> <Run Text="{Binding ActiveCameraDisplayName, Mode=OneWay}"/>
                     </TextBlock>
+                    <TextBlock Text="Impresoras" Style="{StaticResource Caption}" Margin="0,24,0,8"/>
+                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureSmallPrinterCommand}" HorizontalAlignment="Stretch" FontSize="20">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
+                            <TextBlock Text="Configurar impresora figurita" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource SecondaryButton}" Command="{Binding ConfigureXlPrinterCommand}" Margin="0,10,0,0" HorizontalAlignment="Stretch" FontSize="20">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPrinter}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>
+                            <TextBlock Text="Configurar impresora XL" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Text="{Binding AdminMessage}" Style="{StaticResource Caption}" Margin="0,8,0,0"
+                               Visibility="{Binding AdminMessage, Converter={StaticResource NullToVisibility}}"/>
                     <Button Style="{StaticResource SecondaryButton}" Command="{Binding OpenGalleryCommand}" Margin="0,24,0,0" HorizontalAlignment="Stretch">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconGallery}" Style="{StaticResource Icon}" Margin="0,0,12,0"/>

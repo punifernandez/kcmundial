@@ -47,13 +47,14 @@ public partial class App : Application
         var printPage = new PrintPageSpec(settings.PrintPageWidthInches, settings.PrintPageHeightInches, settings.PrintMarginMm);
         var exportService = new ExportService(pathResolver, new FileNaming(), _composer, printPage, metadataWriter,
             settings.UploadEnabled ? new PhotoUploadService(_logger) : null, _logger);
-        var smallPrinter = new PhotoPrinter(settings.SmallPrintProfile, _logger);
-        var xlPrinter = new PhotoPrinter(settings.XlPrintProfile, _logger);
+        var smallPrinter = new PhotoPrinter(settings.SmallPrintProfile, Path.Combine(pathResolver.RootInstallPath, "impresora_figurita.devmode"), _logger);
+        var xlPrinter = new PhotoPrinter(settings.XlPrintProfile, Path.Combine(pathResolver.RootInstallPath, "impresora_xl.devmode"), _logger);
 
         _serverHost = new LocalServerHost(pathResolver, _logger);
         await _serverHost.StartAsync();
 
-        var mainVm = new MainViewModel(_cameraManager, faceDetector, new PositioningValidator(), exportService, pathResolver, settings, _logger);
+        var mainVm = new MainViewModel(_cameraManager, faceDetector, new PositioningValidator(), exportService, pathResolver, settings,
+            smallPrinter, xlPrinter, _logger);
 
         var monitors = ScreenHelper.GetAllMonitors();
         _logger.Info("Monitors: " + string.Join("; ", monitors.Select(m => $"{m.DeviceName} {m.Width}x{m.Height}@{m.Left},{m.Top}{(m.IsPrimary ? " primary" : "")}")));

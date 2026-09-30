@@ -22,6 +22,8 @@ public partial class MainViewModel : ObservableObject
     private readonly ExportService _exportService;
     private readonly IPathResolver _pathResolver;
     private readonly AppSettings _settings;
+    private readonly PhotoPrinter _smallPrinter;
+    private readonly PhotoPrinter _xlPrinter;
     private readonly IAppLogger? _logger;
     private const string CameraPreferenceFileName = "kcmundial_camera.txt";
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
@@ -124,6 +126,8 @@ public partial class MainViewModel : ObservableObject
         ExportService exportService,
         IPathResolver pathResolver,
         AppSettings settings,
+        PhotoPrinter smallPrinter,
+        PhotoPrinter xlPrinter,
         IAppLogger? logger)
     {
         _cameraManager = cameraManager;
@@ -132,6 +136,8 @@ public partial class MainViewModel : ObservableObject
         _exportService = exportService;
         _pathResolver = pathResolver;
         _settings = settings;
+        _smallPrinter = smallPrinter;
+        _xlPrinter = xlPrinter;
         _logger = logger;
         _cameraManager.CameraError += OnCameraError;
 
@@ -469,7 +475,28 @@ public partial class MainViewModel : ObservableObject
     // ---------------------------------------------------------------- Operador
 
     [RelayCommand]
-    private void ToggleAdminPanel() => IsAdminPanelOpen = !IsAdminPanelOpen;
+    private void ToggleAdminPanel()
+    {
+        IsAdminPanelOpen = !IsAdminPanelOpen;
+        AdminMessage = null;
+    }
+
+    /// <summary>Resultado de la última acción del panel del operador.</summary>
+    [ObservableProperty]
+    private string? _adminMessage;
+
+    [RelayCommand]
+    private void ConfigureSmallPrinter() => ConfigurePrinter(_smallPrinter);
+
+    [RelayCommand]
+    private void ConfigureXlPrinter() => ConfigurePrinter(_xlPrinter);
+
+    /// <summary>Abre la ventana del fabricante (tipo de papel, calidad…) y la app guarda lo elegido para cada impresión.</summary>
+    private void ConfigurePrinter(PhotoPrinter printer)
+    {
+        var owner = Application.Current.MainWindow is { } w ? new System.Windows.Interop.WindowInteropHelper(w).Handle : IntPtr.Zero;
+        AdminMessage = printer.Configure(owner).Message;
+    }
 
     [RelayCommand]
     private void OpenGallery()

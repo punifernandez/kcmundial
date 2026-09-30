@@ -21,17 +21,47 @@ public sealed class PhotoPrinter
     private const int PaperTolerance = 60;
 
     private readonly PrintProfile _profile;
+    private readonly string _devModePath;
     private readonly IAppLogger? _logger;
     private readonly SemaphoreSlim _queueLock = new(1, 1);
     private bool _loggedPaperList;
 
-    public PhotoPrinter(PrintProfile profile, IAppLogger? logger)
+    /// <param name="devModePath">Archivo donde se guarda la configuración del driver elegida desde la app.</param>
+    public PhotoPrinter(PrintProfile profile, string devModePath, IAppLogger? logger)
     {
         _profile = profile;
+        _devModePath = devModePath;
         _logger = logger;
     }
 
     public string Label => _profile.Label;
+
+    /// <summary>Hay una configuración del driver guardada desde la app.</summary>
+    public bool HasSavedSetup => File.Exists(_devModePath);
+
+    /// <summary>
+    /// Abre la ventana de configuración del fabricante para esta impresora y guarda lo elegido.
+    /// Se llama desde el hilo de la UI (la ventana es modal a <paramref name="owner"/>).
+    /// </summary>
+    public PrintOutcome Configure(IntPtr owner)
+    {
+        var printerName = FindPrinter();
+        if (printerName == null)
+            return new PrintOutcome(false, $"No se encontró la impresora {Label} (\"{_profile.PrinterMatch}\").");
+        try
+        {
+            var saved = PrinterSetup.ShowDialogAndSave(owner, printerName, _devModePath);
+            _logger?.Info($"Print[{Label}]: setup dialog for \"{printerName}\" {(saved ? "saved" : "cancelled")}");
+            return saved
+                ? new PrintOutcome(true, $"Configuración de {printerName} guardada.")
+                : new PrintOutcome(false, "No se cambió nada.");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error($"Print[{Label}]: setup dialog failed", ex);
+            return new PrintOutcome(false, $"No se pudo abrir la configuración: {ex.Message}");
+        }
+    }
 
     public async Task<PrintOutcome> PrintAsync(string imagePath)
     {
@@ -64,9 +94,19 @@ public sealed class PhotoPrinter
         if (!doc.PrinterSettings.IsValid)
             return new PrintOutcome(false, $"La impresora \"{printerName}\" no está disponible.");
 
-        var paper = ChoosePaper(doc.PrinterSettings);
-        if (paper != null)
-            doc.DefaultPageSettings.PaperSize = paper;
+        // Configuración del driver guardada desde la app (papel, tipo de papel, calidad…): tiene prioridad.
+        var saved = PrinterSetup.Load(_devModePath);
+        if (saved != null)
+        {
+            PrinterSetup.Apply(doc.PrinterSettings, doc.DefaultPageSettings, saved);
+            LogPaperList(doc.PrinterSettings);
+        }
+        else
+        {
+            var paper = ChoosePaper(doc.PrinterSettings);
+            if (paper != null)
+                doc.DefaultPageSettings.PaperSize = paper;
+        }
         doc.DefaultPageSettings.Landscape = false;
         doc.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
         doc.OriginAtMargins = false;
@@ -114,7 +154,8 @@ public sealed class PhotoPrinter
         var chosen = doc.DefaultPageSettings.PaperSize;
         _logger?.Info($"Print[{Label}]: sent {Path.GetFileName(imagePath)} ({image.Width}x{image.Height}) to \"{printerName}\" " +
                       $"paper=\"{chosen.PaperName}\" {chosen.Width / 100.0:0.##}x{chosen.Height / 100.0:0.##}in " +
-                      $"page={drawnPage.Width / 100.0:0.##}x{drawnPage.Height / 100.0:0.##}in rotated={rotated} copies={doc.PrinterSettings.Copies}" +
+                      $"page={drawnPage.Width / 100.0:0.##}x{drawnPage.Height / 100.0:0.##}in rotated={rotated} copies={doc.PrinterSettings.Copies} " +
+                      $"driverSettings={(saved != null ? "saved-in-app" : "windows-defaults")}" +
                       (problem != null ? $" (printer: {problem})" : ""));
 
         return problem == null
@@ -130,16 +171,19 @@ public sealed class PhotoPrinter
                ?? installed.FirstOrDefault(p => p.Contains(wanted, StringComparison.OrdinalIgnoreCase));
     }
 
+    private void LogPaperList(PrinterSettings printer)
+    {
+        if (_loggedPaperList) return;
+        _loggedPaperList = true;
+        _logger?.Info($"Print[{Label}]: driver paper sizes: " + string.Join("; ", printer.PaperSizes.Cast<PaperSize>().Select(p =>
+            $"\"{p.PaperName}\" {p.Width / 100.0:0.##}x{p.Height / 100.0:0.##}in")));
+    }
+
     /// <summary>Papel por nombre configurado, o el más parecido al tamaño configurado (en cualquier orientación).</summary>
     private PaperSize? ChoosePaper(PrinterSettings printer)
     {
         var papers = printer.PaperSizes.Cast<PaperSize>().ToList();
-        if (!_loggedPaperList)
-        {
-            _loggedPaperList = true;
-            _logger?.Info($"Print[{Label}]: driver paper sizes: " + string.Join("; ", papers.Select(p =>
-                $"\"{p.PaperName}\" {p.Width / 100.0:0.##}x{p.Height / 100.0:0.##}in")));
-        }
+        LogPaperList(printer);
 
         if (!string.IsNullOrWhiteSpace(_profile.PaperName))
         {
