@@ -42,7 +42,8 @@ public partial class MainViewModel : ObservableObject
     private long _lastDetectionTick;
     private byte[]? _detectionBuffer;
 
-    private readonly Dictionary<string, MediaPlayer> _sounds = new();
+    // SoundPlayer (WAV precargado) arranca sin demora: el beep coincide con cada número de la cuenta.
+    private readonly Dictionary<string, System.Media.SoundPlayer> _sounds = new();
     private static readonly string SoundsFolder = Path.Combine(AppContext.BaseDirectory, "assets", "sounds");
 
     private int _previewGeneration;
@@ -428,7 +429,7 @@ public partial class MainViewModel : ObservableObject
             for (var i = _settings.CountdownSeconds; i >= 1; i--)
             {
                 CountdownNumber = i;
-                PlaySound("ticktack");
+                PlaySound("tick");
                 await Task.Delay(1000);
             }
             IsCountdownVisible = false;
@@ -473,14 +474,18 @@ public partial class MainViewModel : ObservableObject
 
     private void PreloadSounds()
     {
-        foreach (var name in new[] { "ticktack", "shutter" })
+        foreach (var name in new[] { "tick", "shutter" })
         {
-            var path = new[] { ".wav", ".mp3" }.Select(ext => Path.Combine(SoundsFolder, name + ext)).FirstOrDefault(File.Exists);
-            if (path == null) continue;
+            var path = Path.Combine(SoundsFolder, name + ".wav");
+            if (!File.Exists(path))
+            {
+                _logger?.Info($"Sound {name}: {path} not found");
+                continue;
+            }
             try
             {
-                var player = new MediaPlayer();
-                player.Open(new Uri(path, UriKind.Absolute));
+                var player = new System.Media.SoundPlayer(path);
+                player.Load();
                 _sounds[name] = player;
             }
             catch (Exception ex)
@@ -493,9 +498,8 @@ public partial class MainViewModel : ObservableObject
     private void PlaySound(string name)
     {
         if (!_sounds.TryGetValue(name, out var player)) return;
-        player.Stop();
-        player.Position = TimeSpan.Zero;
-        player.Play();
+        try { player.Play(); }
+        catch (Exception ex) { _logger?.Info($"Sound {name}: {ex.Message}"); }
     }
 
     public void OnReturnFromResult()
