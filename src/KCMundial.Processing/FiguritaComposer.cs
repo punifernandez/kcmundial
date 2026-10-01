@@ -33,15 +33,18 @@ public sealed class FiguritaComposer : IDisposable
         _logger = logger;
     }
 
-    /// <summary>Crea la foto "derecha" a partir del cuadro BGRA de la cámara, aplicando la rotación de montaje (0/90/180/270 horario).</summary>
-    public static SKImage CreateUprightPhoto(byte[] bgra, int width, int height, int rotationClockwise)
+    /// <summary>
+    /// Crea la foto "derecha" a partir del cuadro BGRA de la cámara: aplica la rotación de montaje (0/90/180/270
+    /// horario) y, si se pide, la espeja como el preview (antes de ponerle el marco, que queda siempre al derecho).
+    /// </summary>
+    public static SKImage CreateUprightPhoto(byte[] bgra, int width, int height, int rotationClockwise, bool mirror = false)
     {
         var info = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);
         var source = SKImage.FromPixelCopy(info, bgra, width * 4)
             ?? throw new InvalidOperationException("No se pudo crear la imagen de la cámara.");
 
         var rotation = NormalizeRotation(rotationClockwise);
-        if (rotation == 0)
+        if (rotation == 0 && !mirror)
             return source;
 
         var swap = rotation is 90 or 270;
@@ -50,6 +53,8 @@ public sealed class FiguritaComposer : IDisposable
         using var surface = SKSurface.Create(new SKImageInfo(outW, outH, SKColorType.Bgra8888, SKAlphaType.Opaque))
             ?? throw new InvalidOperationException("No se pudo crear la superficie para rotar.");
         var canvas = surface.Canvas;
+        if (mirror)
+            canvas.Scale(-1, 1, outW / 2f, 0); // espejo horizontal de la imagen ya derecha, igual que el preview
         canvas.Translate(outW / 2f, outH / 2f);
         canvas.RotateDegrees(rotation);
         canvas.Translate(-width / 2f, -height / 2f);

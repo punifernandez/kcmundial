@@ -15,8 +15,10 @@ public sealed class AppSettings
     /// <summary>Rotación horaria para enderezar la imagen de la cámara: 0, 90, 180 o 270.
     /// Brio apaisada (normal): 0. Montada vertical: 90 o 270.</summary>
     public int CameraRotation { get; set; } = 0;
-    /// <summary>Preview en espejo (la foto final nunca sale espejada).</summary>
+    /// <summary>Preview en espejo.</summary>
     public bool MirrorPreview { get; set; } = true;
+    /// <summary>La foto final sale espejada igual que el preview (el marco siempre queda al derecho).</summary>
+    public bool MirrorPhoto { get; set; } = true;
     /// <summary>Sacar la foto en la resolución máxima de la cámara (si falla, usa el cuadro del preview).</summary>
     public bool HighResCapture { get; set; } = true;
     public int CountdownSeconds { get; set; } = 3;
