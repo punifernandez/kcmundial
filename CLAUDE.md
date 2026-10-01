@@ -36,7 +36,7 @@ Detalles de uso, configuración y archivos generados: `README.md`.
 - Orientación de la cámara: `CameraRotation` (0 apaisada, 90/270 vertical) endereza la imagen; el preview se
   rota con un `LayoutTransform` en la vista, la foto se rota en Skia. La foto se recorta al centro con la
   proporción del marco (5:7).
-- La foto final nunca sale espejada (solo el preview).
+- Ni el preview ni la foto final se espejan (decisión del cliente): lo que se ve es lo que sale impreso.
 - La Sprocket/ADB ya no se usa.
 - Diseño: `Themes/AppTheme.xaml` (estilos comunes) + `Themes/Plano.xaml` (colores, textos `Text.*`, íconos).
   Estética plana: bloques rectangulares, sin degradés ni botones ovalados.

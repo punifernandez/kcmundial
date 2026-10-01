@@ -64,7 +64,7 @@ Se crea junto al `.exe` la primera vez que se abre la app. Cambiá los valores y
 | Opción | Por defecto | Qué hace |
 |---|---|---|
 | `CameraRotation` | `0` | Grados (horario) para enderezar la imagen. Brio apaisada: `0`. Montada vertical: `90` (o `270` si sale cabeza abajo). |
-| `MirrorPreview` | `true` | Preview en espejo (la foto final nunca sale espejada). |
+| `MirrorPreview` | `false` | Preview en espejo. Por defecto no: el preview muestra lo mismo que sale en la foto. |
 | `HighResCapture` | `true` | Foto en la resolución máxima de la cámara: pasa a 4K al empezar la cuenta regresiva (para que enfoque) y se queda con el cuadro más nítido. Si falla, usa el cuadro del preview. |
 | `CountdownSeconds` | `3` | Cuenta regresiva. |
 | `AutoPrint` | `true` | Imprimir apenas se saca la foto. |
