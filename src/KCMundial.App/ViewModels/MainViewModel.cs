@@ -445,7 +445,7 @@ public partial class MainViewModel : ObservableObject
             }
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var result = await _exportService.ExportAsync(capture, Format, SelectedFrameIndex, _settings.CameraRotation, _settings.MirrorPhoto, cts.Token);
+            var result = await _exportService.ExportAsync(capture, Format, SelectedFrameIndex, _settings.CameraRotation, cts.Token);
             if (result == null)
             {
                 CameraError = "No se pudo armar la foto. Probá de nuevo.";

@@ -52,7 +52,7 @@ public sealed class ExportService
     /// ampliaciones_20x30. Foto grande: se imprime el máster (A4 apaisado) en la Epson.
     /// La subida para el QR arranca en segundo plano y avisa con <see cref="UploadFinished"/>.
     /// </summary>
-    public async Task<ExportResult?> ExportAsync(CaptureResult capture, PhotoFormat format, int frameIndex, int rotationClockwise, bool mirror, CancellationToken cancellationToken = default)
+    public async Task<ExportResult?> ExportAsync(CaptureResult capture, PhotoFormat format, int frameIndex, int rotationClockwise, CancellationToken cancellationToken = default)
     {
         var id = _fileNaming.NewId();
         var sw = Stopwatch.StartNew();
@@ -61,7 +61,7 @@ public sealed class ExportService
             var result = await Task.Run(async () =>
             {
                 _pathResolver.EnsureFolders();
-                using var photo = FiguritaComposer.CreateUprightPhoto(capture.Bgra, capture.Width, capture.Height, rotationClockwise, mirror);
+                using var photo = FiguritaComposer.CreateUprightPhoto(capture.Bgra, capture.Width, capture.Height, rotationClockwise);
                 cancellationToken.ThrowIfCancellationRequested();
                 using var master = _composer.ComposeMaster(photo, _pathResolver.GetFramePath(format, frameIndex));
                 var composeMs = sw.ElapsedMilliseconds;
@@ -96,7 +96,7 @@ public sealed class ExportService
                 await Task.WhenAll(tasks).ConfigureAwait(false);
 
                 _metadataWriter?.Write(new FiguritaMetadata { Id = id, CreatedAt = DateTime.UtcNow, Format = format });
-                _logger?.Info($"Export {id} ({format}): capture {capture.Width}x{capture.Height} (highRes={capture.IsHighRes}, rot={rotationClockwise}, mirror={mirror}), " +
+                _logger?.Info($"Export {id} ({format}): capture {capture.Width}x{capture.Height} (highRes={capture.IsHighRes}, rot={rotationClockwise}), " +
                               $"master {master.Width}x{master.Height}, compose {composeMs} ms, total {sw.ElapsedMilliseconds} ms");
                 return new ExportResult(id, format, displayPath, printPath, masterPath, bigPath, rawPath);
             }, cancellationToken).ConfigureAwait(false);
